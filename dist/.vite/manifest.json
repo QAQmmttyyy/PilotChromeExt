@@ -1,0 +1,49 @@
+{
+  "../../../../@crx/manifest": {
+    "file": "assets/crx-manifest.js-CvAwLx7f.js",
+    "name": "crx-manifest.js",
+    "src": "../../../../@crx/manifest",
+    "isEntry": true
+  },
+  "_index-C6a-wVNU.css": {
+    "file": "assets/index-C6a-wVNU.css",
+    "src": "_index-C6a-wVNU.css"
+  },
+  "_index-DNyUFtlp.js": {
+    "file": "assets/index-DNyUFtlp.js",
+    "name": "index",
+    "css": [
+      "assets/index-C6a-wVNU.css"
+    ]
+  },
+  "src/background/index.ts": {
+    "file": "assets/index.ts-Co3_6WY6.js",
+    "name": "index.ts",
+    "src": "src/background/index.ts",
+    "isEntry": true
+  },
+  "src/content/index.ts": {
+    "file": "assets/index.ts-CVUeAmDf.js",
+    "name": "index.ts",
+    "src": "src/content/index.ts",
+    "isEntry": true
+  },
+  "src/popup/index.html": {
+    "file": "assets/index.html-HKj_Lse6.js",
+    "name": "index.html",
+    "src": "src/popup/index.html",
+    "isEntry": true,
+    "imports": [
+      "_index-DNyUFtlp.js"
+    ]
+  },
+  "src/sidepanel/index.html": {
+    "file": "assets/index.html-jPtZu3n2.js",
+    "name": "index.html",
+    "src": "src/sidepanel/index.html",
+    "isEntry": true,
+    "imports": [
+      "_index-DNyUFtlp.js"
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "Pilot - AI Script Runner",
+  "version": "1.0.0",
+  "description": "Create and run AI-generated scripts on any webpage.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "src/popup/index.html"
+  },
+  "background": {
+    "service_worker": "service-worker-loader.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "assets/index.ts-CVUeAmDf.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "assets/index.ts-CVUeAmDf.js"
+      ],
+      "use_dynamic_url": false
+    }
+  ]
+}
