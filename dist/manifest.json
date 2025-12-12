@@ -25,12 +25,22 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.ts-CVUeAmDf.js"
+        "assets/index.ts-XjTYuwm-.js"
       ],
       "matches": [
         "<all_urls>"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_start"
+    },
+    {
+      "js": [
+        "assets/main-world.ts-aFBQRgIK.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "web_accessible_resources": [
@@ -39,7 +49,8 @@
         "<all_urls>"
       ],
       "resources": [
-        "assets/index.ts-CVUeAmDf.js"
+        "assets/index.ts-XjTYuwm-.js",
+        "assets/main-world.ts-aFBQRgIK.js"
       ],
       "use_dynamic_url": false
     }

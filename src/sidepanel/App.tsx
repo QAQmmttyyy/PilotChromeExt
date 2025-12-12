@@ -1,35 +1,79 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Plus, Trash2, ArrowLeft, Save, Sparkles } from 'lucide-react';
+import { Play, Plus, Trash2, ArrowLeft, Save, Sparkles, Eye } from 'lucide-react';
 import { Script, storage } from '../lib/storage';
+import { parseScriptToWorkflow } from '../lib/parser';
 
 // Seed data logic
 const SEED_SCRIPT: Script = {
-  id: 'boss-auto-reply',
-  name: 'Boss直聘自动回复',
-  description: '自动回复打招呼消息',
-  code: `// 这是一个示例脚本
-// 目标: Boss直聘聊天窗口
-
-function autoReply() {
-  const chatInput = document.querySelector('.chat-input');
-  // 注意：实际 DOM 结构可能随网站更新而变化
-  // 这里仅为示例
-  if (chatInput) {
-    // 模拟输入
-    chatInput.textContent = "你好，我对这个职位很感兴趣，这是我的简历。";
-    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+  id: 'baidu-google-workflow',
+  name: '百度 -> Google 搜索',
+  description: '在百度搜索，提取结果，再去 Google 搜索（健壮版）',
+  code: `// === STEP: 在百度搜索 (https://www.baidu.com) ===
+(async () => {
+  try {
+    // 等待搜索框出现
+    console.log('[Pilot] 等待百度搜索框...');
+    const input = await window.Pilot.waitFor('#kw, input[name="wd"]', 5000);
     
-    console.log('Pilot: 已填入自动回复');
+    console.log('[Pilot] ✓ 找到搜索框');
+    input.value = "Chrome Extension Development";
+    input.dispatchEvent(new Event('input', {bubbles: true}));
     
-    // 找到发送按钮并点击 (慎用自动点击)
-    // const sendBtn = document.querySelector('.btn-send');
-    // if(sendBtn) sendBtn.click();
-  } else {
-    console.log('Pilot: 未找到聊天输入框');
+    // 等待搜索按钮
+    const btn = await window.Pilot.waitFor('#su, input[type="submit"]', 3000);
+    console.log('[Pilot] ✓ 找到搜索按钮，点击...');
+    btn.click();
+    
+    // 成功，传递数据给下一步
+    window.Pilot.workflow.next({ searchTerm: "Chrome Extension" });
+  } catch (err) {
+    window.Pilot.workflow.fail('百度首页: ' + err.message);
   }
-}
+})();
 
-autoReply();`,
+// === STEP: 提取百度结果 (https://www.baidu.com/s) ===
+(async () => {
+  try {
+    console.log('[Pilot] 等待百度搜索结果...');
+    // 等待结果列表出现
+    const firstResult = await window.Pilot.waitFor('h3.c-title a, .result h3 a, .c-title a', 8000);
+    
+    const title = firstResult.innerText.trim();
+    if (!title) {
+      throw new Error('提取到的标题为空');
+    }
+    
+    console.log('[Pilot] ✓ 提取到标题:', title);
+    window.Pilot.workflow.next({ baiduTitle: title });
+  } catch (err) {
+    window.Pilot.workflow.fail('百度结果页: ' + err.message);
+  }
+})();
+
+// === STEP: 去 Google 搜索 (https://www.google.com) ===
+(async () => {
+  try {
+    const data = window.PilotData || {};
+    const query = data.baiduTitle || data.searchTerm;
+    
+    if (!query) {
+      throw new Error('没有从上一步获取到搜索词');
+    }
+    
+    console.log('[Pilot] 等待 Google 搜索框...');
+    const googleInput = await window.Pilot.waitFor('textarea[name="q"], input[name="q"]', 5000);
+    
+    googleInput.value = query;
+    googleInput.dispatchEvent(new Event('input', {bubbles: true}));
+    
+    console.log('[Pilot] ✓ 已填入 Google 搜索框');
+    alert('✅ Workflow 完成！\\n\\n从百度提取: ' + query + '\\n已填入 Google 搜索框');
+    window.Pilot.workflow.finish();
+  } catch (err) {
+    window.Pilot.workflow.fail('Google 页面: ' + err.message);
+  }
+})();
+`,
   createdAt: Date.now(),
   updatedAt: Date.now()
 };
@@ -40,6 +84,7 @@ function App() {
   const [currentScript, setCurrentScript] = useState<Script | null>(null);
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [pageContext, setPageContext] = useState<string>('');
 
   useEffect(() => {
     loadScripts();
@@ -59,7 +104,7 @@ function App() {
       id: crypto.randomUUID(),
       name: 'New Script',
       description: 'Created by Pilot',
-      code: '// Start typing or ask AI to generate code...',
+      code: '// === STEP: Start (https://example.com) ===\n// Write your code here',
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
@@ -93,42 +138,75 @@ function App() {
         }
         return [...prev, updatedScript];
       });
-      // Don't switch view, just notify save
-      // alert('Saved!'); 
     }
   };
 
   const handleRun = async (script: Script) => {
-    // Get current active tab
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     
     if (!tab.id) return;
 
-    if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://') || !tab.url) {
-      alert('无法在扩展页面或浏览器系统页面运行脚本。\n请打开一个真实的网页（如 boss直聘）再试。');
-      return;
+    // 1. 解析脚本
+    const workflowSteps = parseScriptToWorkflow(script.code);
+    console.log('Parsed Workflow:', workflowSteps);
+    
+    const isWorkflow = workflowSteps.length > 1 || (workflowSteps.length === 1 && workflowSteps[0].url);
+
+    // 2. 检查权限
+    // 如果是普通单页脚本，必须在真实网页运行
+    // 如果是 Workflow 且第一步指定了 URL，允许在任何页面运行（因为引擎会负责跳转）
+    if (!isWorkflow) {
+        if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://') || !tab.url) {
+          alert('单页脚本无法在扩展页面运行。\n请打开一个真实的网页再试，或者在脚本第一行添加 "// === STEP: Name (https://...) ===" 来指定目标网址。');
+          return;
+        }
     }
 
+    // 3. 发送给 Background 引擎
     try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (code) => {
-          try {
-             const run = new Function(code);
-             run();
-          } catch (e) {
-             const s = document.createElement('script');
-             s.textContent = code;
-             (document.head || document.documentElement).appendChild(s);
-             s.remove();
-          }
-        },
-        args: [script.code],
-        world: 'MAIN'
+      await chrome.runtime.sendMessage({
+        type: 'START_WORKFLOW',
+        payload: { steps: workflowSteps, tabId: tab.id }
       });
+      // 可选：如果是在 SidePanel，不一定要关闭。如果是在 Popup，通常会关闭。
     } catch (err) {
-      console.error('Failed to execute script:', err);
-      alert('Failed to execute script. Check console for details.');
+      console.error('Failed to start workflow:', err);
+      alert('Failed to start workflow.');
+    }
+  };
+
+  const capturePageContext = async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab.id) return;
+
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+            const interactiveElements = Array.from(document.querySelectorAll('button, a, input, textarea, form'));
+            const simplifiedDOM = interactiveElements.map(el => {
+                const tag = el.tagName.toLowerCase();
+                const id = el.id ? `#${el.id}` : '';
+                const cls = Array.from(el.classList).map(c => `.${c}`).join('');
+                const text = (el as HTMLElement).innerText?.slice(0, 50).replace(/\n/g, ' ') || '';
+                return `${tag}${id}${cls} [text="${text}"]`;
+            }).join('\n');
+            
+            return {
+                title: document.title,
+                url: window.location.href,
+                dom: simplifiedDOM
+            };
+        }
+      });
+      
+      if (results[0] && results[0].result) {
+        const context = results[0].result;
+        setPageContext(`Current Page: ${context.title}\nURL: ${context.url}\nInteractive Elements:\n${context.dom}`);
+        setAiPrompt((prev) => prev ? prev : "帮我分析这个页面，写一个脚本...");
+      }
+    } catch (err) {
+      console.error("Failed to capture context", err);
     }
   };
 
@@ -136,9 +214,35 @@ function App() {
     if (!aiPrompt.trim()) return;
     setIsGenerating(true);
     
+    const fullPrompt = `User Request: ${aiPrompt}\n\n${pageContext ? `Page Context (Use this to find selectors):\n${pageContext}` : ''}`;
+    console.log("Sending to AI:", fullPrompt);
+
     // Simulate AI delay
     setTimeout(() => {
-      const mockCode = `// AI Generated Code for: ${aiPrompt}\n\nconsole.log("Hello from AI! I heard you want: ${aiPrompt}");\n// TODO: Implement actual logic`;
+      let mockCode = `// AI Response\n`;
+      const lowerPrompt = aiPrompt.toLowerCase();
+      
+      // 简单模拟 AI 生成分步脚本
+      if (lowerPrompt.includes('google') && lowerPrompt.includes('bing')) {
+          mockCode = `
+// === STEP: Google Search (https://www.google.com) ===
+const input = document.querySelector('input[name="q"]');
+if(input) {
+  input.value = "${aiPrompt.replace('google', '').replace('bing', '').trim()}";
+  input.form.submit();
+  window.Pilot.workflow.next();
+}
+
+// === STEP: Bing Search (https://www.bing.com) ===
+const input = document.querySelector('input[name="q"]');
+if(input) {
+  input.value = "Result from Google";
+  window.Pilot.workflow.finish();
+}
+`;
+      } else {
+          mockCode += `console.log("AI executed: ${aiPrompt}");`;
+      }
       
       if (currentScript) {
         setCurrentScript({
@@ -148,7 +252,7 @@ function App() {
       }
       setIsGenerating(false);
       setAiPrompt('');
-    }, 1500);
+    }, 1000);
   };
 
   if (view === 'editor' && currentScript) {
@@ -162,16 +266,17 @@ function App() {
             <input 
               value={currentScript.name} 
               onChange={e => setCurrentScript({...currentScript, name: e.target.value})}
-              className="font-bold text-gray-800 bg-transparent border-none focus:ring-0 w-40"
+              className="font-bold text-gray-800 bg-transparent border-none focus:ring-0 w-32 truncate"
             />
           </div>
           <div className="flex gap-2">
             <button 
               onClick={() => handleRun(currentScript)}
-              className="p-2 text-blue-600 bg-blue-50 rounded hover:bg-blue-100"
-              title="Run on current tab"
+              className="p-2 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 flex items-center gap-1"
+              title="Run Workflow"
             >
               <Play size={18} />
+              <span className="text-xs font-semibold">Run</span>
             </button>
             <button 
               onClick={handleSave}
@@ -184,27 +289,42 @@ function App() {
         </header>
 
         <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
-          <div className="flex-1 border border-gray-300 rounded-lg overflow-hidden flex flex-col bg-white">
+          <div className="flex-1 border border-gray-300 rounded-lg overflow-hidden flex flex-col bg-white shadow-sm">
+             <div className="bg-gray-100 px-4 py-1 text-xs text-gray-500 border-b border-gray-200 flex justify-between">
+                <span>Workflow Editor</span>
+                <span className="text-gray-400">Use // === STEP: Name (Url) === to split steps</span>
+             </div>
             <textarea
-              className="flex-1 w-full p-4 font-mono text-sm resize-none focus:outline-none"
+              className="flex-1 w-full p-4 font-mono text-xs resize-none focus:outline-none leading-relaxed"
               value={currentScript.code}
               onChange={e => setCurrentScript({...currentScript, code: e.target.value})}
               spellCheck={false}
-              placeholder="// Write your javascript code here..."
+              placeholder="// === STEP: Step 1 === ..."
             />
           </div>
           
-          <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles size={16} className="text-purple-600" />
-              <span className="text-xs font-semibold text-purple-600">AI Assistant</span>
+          <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col gap-2">
+            <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                <Sparkles size={16} className="text-purple-600" />
+                <span className="text-xs font-semibold text-purple-600">AI Assistant</span>
+                </div>
+                
+                <button 
+                    onClick={capturePageContext}
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded border bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                >
+                    <Eye size={12} />
+                    {pageContext ? 'Context Loaded' : 'Read Page'}
+                </button>
             </div>
+            
             <div className="flex gap-2">
               <input 
                 type="text" 
                 value={aiPrompt}
                 onChange={e => setAiPrompt(e.target.value)}
-                placeholder="Ask AI to edit this script..."
+                placeholder="Describe your workflow..."
                 className="flex-1 text-sm border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-purple-400"
                 onKeyDown={e => e.key === 'Enter' && handleAiGenerate()}
               />
@@ -213,7 +333,7 @@ function App() {
                 disabled={isGenerating}
                 className="bg-purple-600 text-white px-4 py-2 rounded text-sm hover:bg-purple-700 disabled:opacity-50"
               >
-                {isGenerating ? '...' : 'Send'}
+                Send
               </button>
             </div>
           </div>
@@ -227,10 +347,10 @@ function App() {
       <header className="p-4 bg-white border-b border-gray-200 shadow-sm flex justify-between items-center sticky top-0 z-10">
         <h1 className="text-lg font-bold text-gray-800">Pilot Scripts</h1>
         <button 
-          onClick={handleCreateNew}
-          className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow-md"
+            onClick={handleCreateNew}
+            className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow-md"
         >
-          <Plus size={20} />
+            <Plus size={20} />
         </button>
       </header>
 
@@ -266,11 +386,6 @@ function App() {
             </div>
           </div>
         ))}
-        {scripts.length === 0 && (
-          <div className="text-center py-10 text-gray-400">
-            <p>No scripts yet. Create one!</p>
-          </div>
-        )}
       </main>
     </div>
   );
