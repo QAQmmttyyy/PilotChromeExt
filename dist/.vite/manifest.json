@@ -5,16 +5,16 @@
     "src": "../../../../@crx/manifest",
     "isEntry": true
   },
-  "_index-CLzuV00M.css": {
-    "file": "assets/index-CLzuV00M.css",
-    "src": "_index-CLzuV00M.css"
-  },
-  "_index-DgdPjMZI.js": {
-    "file": "assets/index-DgdPjMZI.js",
+  "_index-B0rA2Sqe.js": {
+    "file": "assets/index-B0rA2Sqe.js",
     "name": "index",
     "css": [
-      "assets/index-CLzuV00M.css"
+      "assets/index-CSVyL5uO.css"
     ]
+  },
+  "_index-CSVyL5uO.css": {
+    "file": "assets/index-CSVyL5uO.css",
+    "src": "_index-CSVyL5uO.css"
   },
   "src/background/index.ts": {
     "file": "assets/index.ts-99juL0UP.js",
@@ -35,21 +35,21 @@
     "isEntry": true
   },
   "src/popup/index.html": {
-    "file": "assets/index.html-DCbitV_q.js",
+    "file": "assets/index.html-Gtc4-p1b.js",
     "name": "index.html",
     "src": "src/popup/index.html",
     "isEntry": true,
     "imports": [
-      "_index-DgdPjMZI.js"
+      "_index-B0rA2Sqe.js"
     ]
   },
   "src/sidepanel/index.html": {
-    "file": "assets/index.html-SF92gMb6.js",
+    "file": "assets/index.html-BuWtatqd.js",
     "name": "index.html",
     "src": "src/sidepanel/index.html",
     "isEntry": true,
     "imports": [
-      "_index-DgdPjMZI.js"
+      "_index-B0rA2Sqe.js"
     ]
   }
 }

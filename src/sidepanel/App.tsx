@@ -1,105 +1,167 @@
-import React, { useState, useEffect } from 'react';
-import { Play, Plus, Trash2, ArrowLeft, Save, Sparkles, Eye } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, Plus, Trash2, ArrowLeft, Save, Sparkles, Eye, Settings, X, MessageSquare, RotateCcw, Brain } from 'lucide-react';
 import { Script, storage } from '../lib/storage';
 import { parseScriptToWorkflow } from '../lib/parser';
+import { generateScriptStream, cleanGeneratedCode, buildUserMessage, AVAILABLE_MODELS, ChatMessage, getModelInfo } from '../lib/ai';
+import { settings } from '../lib/settings';
 
-// Seed data logic
+// Seed data
 const SEED_SCRIPT: Script = {
-  id: 'baidu-google-workflow',
-  name: '百度 -> Google 搜索',
-  description: 'AI 生成的完整脚本示例：工具函数 + 业务逻辑',
-  code: `// ============================================
-// 工具函数（AI 根据需要生成）
-// ============================================
-function waitForElement(selector, timeout = 5000) {
-  return new Promise((resolve, reject) => {
-    const startTime = Date.now();
-    const check = () => {
-      const el = document.querySelector(selector);
-      if (el) {
-        resolve(el);
-      } else if (Date.now() - startTime > timeout) {
-        reject(new Error(\`超时: 未找到元素 "\${selector}" (\${timeout}ms)\`));
-      } else {
-        setTimeout(check, 200);
-      }
-    };
-    check();
-  });
-}
-
-// ============================================
-// === STEP: 在百度搜索 (https://www.baidu.com) ===
-// ============================================
+  id: 'demo-workflow',
+  name: '示例：百度搜索',
+  description: '演示如何使用 Pilot 进行多步骤自动化',
+  code: `// === STEP: 打开百度 (https://www.baidu.com) ===
 (async () => {
   try {
-    console.log('[Step 1] 等待百度搜索框...');
-    const input = await waitForElement('#kw, input[name="wd"]', 5000);
-    
-    console.log('[Step 1] ✓ 找到搜索框');
-    input.value = "Chrome Extension Development";
+    const input = document.querySelector('#kw');
+    if (!input) throw new Error('未找到搜索框');
+    input.value = "Pilot Chrome Extension";
     input.dispatchEvent(new Event('input', {bubbles: true}));
-    
-    const btn = await waitForElement('#su, input[type="submit"]', 3000);
-    console.log('[Step 1] ✓ 点击搜索按钮');
-    btn.click();
-    
-    // 通知 Pilot：步骤完成
-    window.Pilot.workflow.next({ searchTerm: "Chrome Extension" });
+    document.querySelector('#su')?.click();
+    window.Pilot.workflow.next({ keyword: "Pilot" });
   } catch (err) {
-    window.Pilot.workflow.fail('百度首页: ' + err.message);
+    window.Pilot.workflow.fail(err.message);
   }
 })();
 
-// ============================================
-// === STEP: 提取百度结果 (https://www.baidu.com/s) ===
-// ============================================
+// === STEP: 提取搜索结果 (https://www.baidu.com/s) ===
 (async () => {
-  try {
-    console.log('[Step 2] 等待百度搜索结果...');
-    const firstResult = await waitForElement('h3.c-title a, .result h3 a, .c-title a', 8000);
-    
-    const title = firstResult.innerText.trim();
-    if (!title) {
-      throw new Error('提取到的标题为空');
-    }
-    
-    console.log('[Step 2] ✓ 提取到:', title);
-    window.Pilot.workflow.next({ baiduTitle: title });
-  } catch (err) {
-    window.Pilot.workflow.fail('百度结果页: ' + err.message);
+  function waitFor(sel, timeout = 5000) {
+    return new Promise((res, rej) => {
+      const t = Date.now();
+      (function c() {
+        const e = document.querySelector(sel);
+        e ? res(e) : Date.now() - t > timeout ? rej(new Error('超时')) : setTimeout(c, 200);
+      })();
+    });
   }
-})();
-
-// ============================================
-// === STEP: 去 Google 搜索 (https://www.google.com) ===
-// ============================================
-(async () => {
+  
   try {
-    const data = window.PilotData || {};
-    const query = data.baiduTitle || data.searchTerm;
-    
-    if (!query) {
-      throw new Error('没有从上一步获取到搜索词');
-    }
-    
-    console.log('[Step 3] 等待 Google 搜索框...');
-    const googleInput = await waitForElement('textarea[name="q"], input[name="q"]', 5000);
-    
-    googleInput.value = query;
-    googleInput.dispatchEvent(new Event('input', {bubbles: true}));
-    
-    console.log('[Step 3] ✅ 完成！已填入:', query);
-    alert(\`✅ Workflow 完成！\\n\\n从百度提取: \${query}\\n已填入 Google 搜索框\`);
+    const result = await waitFor('h3.c-title a', 8000);
+    alert('✅ 找到: ' + result.innerText.trim());
     window.Pilot.workflow.finish();
   } catch (err) {
-    window.Pilot.workflow.fail('Google 页面: ' + err.message);
+    window.Pilot.workflow.fail(err.message);
   }
 })();
 `,
   createdAt: Date.now(),
   updatedAt: Date.now()
 };
+
+// 设置面板
+function SettingsPanel({ onClose }: { onClose: () => void }) {
+  const [apiKey, setApiKey] = useState('');
+  const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    settings.getAIConfig().then(config => {
+      setApiKey(config.apiKey || '');
+      setSelectedModel(config.model || AVAILABLE_MODELS[0].id);
+    });
+  }, []);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    await settings.setAIConfig({ apiKey, model: selectedModel });
+    setIsSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  // 按 provider 分组
+  const groupedModels = AVAILABLE_MODELS.reduce((acc, model) => {
+    if (!acc[model.provider]) acc[model.provider] = [];
+    acc[model.provider].push(model);
+    return acc;
+  }, {} as Record<string, typeof AVAILABLE_MODELS>);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl shadow-2xl w-[90%] max-w-md max-h-[80vh] overflow-hidden flex flex-col">
+        <div className="flex justify-between items-center p-4 border-b">
+          <h2 className="text-lg font-bold text-slate-800">AI 设置</h2>
+          <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4 overflow-y-auto flex-1">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              OpenRouter API Key
+            </label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="sk-or-v1-..."
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              从 <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer" className="text-purple-600 hover:underline">openrouter.ai/keys</a> 获取
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">AI 模型</label>
+            <div className="space-y-3">
+              {Object.entries(groupedModels).map(([provider, models]) => (
+                <div key={provider}>
+                  <div className="text-xs font-semibold text-slate-400 mb-1">{provider}</div>
+                  <div className="space-y-1">
+                    {models.map(model => (
+                      <label
+                        key={model.id}
+                        className={`flex items-center p-2 rounded-lg border cursor-pointer transition-colors ${
+                          selectedModel === model.id
+                            ? 'border-purple-500 bg-purple-50'
+                            : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="model"
+                          value={model.id}
+                          checked={selectedModel === model.id}
+                          onChange={() => setSelectedModel(model.id)}
+                          className="sr-only"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium text-slate-700">{model.name}</span>
+                            {model.thinking && <Brain size={12} className="text-purple-500" />}
+                            <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded">{model.context}</span>
+                          </div>
+                          <div className="text-xs text-slate-500">{model.description}</div>
+                        </div>
+                        {selectedModel === model.id && (
+                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 border-t">
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="w-full bg-purple-600 text-white py-2.5 rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium"
+          >
+            {isSaving ? '保存中...' : saved ? '✓ 已保存' : '保存设置'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const [view, setView] = useState<'list' | 'editor'>('list');
@@ -108,10 +170,31 @@ function App() {
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [pageContext, setPageContext] = useState<string>('');
+  const [showSettings, setShowSettings] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  
+  // 多轮对话
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [showChat, setShowChat] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [currentModel, setCurrentModel] = useState(AVAILABLE_MODELS[0]);
 
   useEffect(() => {
     loadScripts();
+    checkApiKey();
   }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatHistory]);
+
+  const checkApiKey = async () => {
+    const has = await settings.hasApiKey();
+    setHasApiKey(has);
+    const config = await settings.getAIConfig();
+    const modelInfo = getModelInfo(config.model);
+    if (modelInfo) setCurrentModel(modelInfo);
+  };
 
   const loadScripts = async () => {
     let savedScripts = await storage.getScripts();
@@ -125,24 +208,26 @@ function App() {
   const handleCreateNew = () => {
     const newScript: Script = {
       id: crypto.randomUUID(),
-      name: 'New Script',
-      description: 'Created by Pilot',
-      code: '// === STEP: Start (https://example.com) ===\n// Write your code here',
+      name: '新脚本',
+      description: 'AI 生成',
+      code: '// 使用 AI 助手生成脚本\n',
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
     setCurrentScript(newScript);
+    setChatHistory([]);
     setView('editor');
   };
 
   const handleEdit = (script: Script) => {
     setCurrentScript(script);
+    setChatHistory([]);
     setView('editor');
   };
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (confirm('Are you sure you want to delete this script?')) {
+    if (confirm('确定删除此脚本？')) {
       await storage.deleteScript(id);
       loadScripts();
     }
@@ -166,35 +251,26 @@ function App() {
 
   const handleRun = async (script: Script) => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
     if (!tab.id) return;
 
-    // 1. 解析脚本
     const workflowSteps = parseScriptToWorkflow(script.code);
-    console.log('Parsed Workflow:', workflowSteps);
-    
     const isWorkflow = workflowSteps.length > 1 || (workflowSteps.length === 1 && workflowSteps[0].url);
 
-    // 2. 检查权限
-    // 如果是普通单页脚本，必须在真实网页运行
-    // 如果是 Workflow 且第一步指定了 URL，允许在任何页面运行（因为引擎会负责跳转）
     if (!isWorkflow) {
-        if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://') || !tab.url) {
-          alert('单页脚本无法在扩展页面运行。\n请打开一个真实的网页再试，或者在脚本第一行添加 "// === STEP: Name (https://...) ===" 来指定目标网址。');
-          return;
-        }
+      if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://') || !tab.url) {
+        alert('请先打开一个网页，或在脚本中指定目标 URL');
+        return;
+      }
     }
 
-    // 3. 发送给 Background 引擎
     try {
       await chrome.runtime.sendMessage({
         type: 'START_WORKFLOW',
         payload: { steps: workflowSteps, tabId: tab.id }
       });
-      // 可选：如果是在 SidePanel，不一定要关闭。如果是在 Popup，通常会关闭。
     } catch (err) {
       console.error('Failed to start workflow:', err);
-      alert('Failed to start workflow.');
+      alert('启动失败');
     }
   };
 
@@ -206,158 +282,247 @@ function App() {
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: () => {
-            const interactiveElements = Array.from(document.querySelectorAll('button, a, input, textarea, form'));
-            const simplifiedDOM = interactiveElements.map(el => {
-                const tag = el.tagName.toLowerCase();
-                const id = el.id ? `#${el.id}` : '';
-                const cls = Array.from(el.classList).map(c => `.${c}`).join('');
-                const text = (el as HTMLElement).innerText?.slice(0, 50).replace(/\n/g, ' ') || '';
-                return `${tag}${id}${cls} [text="${text}"]`;
-            }).join('\n');
-            
-            return {
-                title: document.title,
-                url: window.location.href,
-                dom: simplifiedDOM
-            };
+          const elements = Array.from(document.querySelectorAll('button, a, input, textarea, form, [role="button"], select'));
+          const simplified = elements.slice(0, 60).map(el => {
+            const tag = el.tagName.toLowerCase();
+            const id = el.id ? `#${el.id}` : '';
+            const cls = el.className && typeof el.className === 'string' ? `.${el.className.split(' ').slice(0, 2).join('.')}` : '';
+            const text = (el as HTMLElement).innerText?.slice(0, 30).replace(/\n/g, ' ').trim() || '';
+            const placeholder = (el as HTMLInputElement).placeholder || '';
+            const type = (el as HTMLInputElement).type ? `[type="${(el as HTMLInputElement).type}"]` : '';
+            const name = (el as HTMLInputElement).name ? `[name="${(el as HTMLInputElement).name}"]` : '';
+            return `${tag}${id}${cls}${type}${name} "${text || placeholder}"`.trim();
+          }).join('\n');
+
+          return {
+            title: document.title,
+            url: location.href,
+            dom: simplified
+          };
         }
       });
-      
-      if (results[0] && results[0].result) {
-        const context = results[0].result;
-        setPageContext(`Current Page: ${context.title}\nURL: ${context.url}\nInteractive Elements:\n${context.dom}`);
-        setAiPrompt((prev) => prev ? prev : "帮我分析这个页面，写一个脚本...");
+
+      if (results[0]?.result) {
+        const ctx = results[0].result;
+        setPageContext(`页面: ${ctx.title}\nURL: ${ctx.url}\n\n可交互元素:\n${ctx.dom}`);
       }
     } catch (err) {
-      console.error("Failed to capture context", err);
+      console.error('Failed to capture context', err);
+      alert('无法读取页面');
     }
   };
 
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
-    setIsGenerating(true);
+
+    const config = await settings.getAIConfig();
+    if (!config.apiKey) {
+      setShowSettings(true);
+      return;
+    }
+
+    // 构建用户消息
+    const userMessage = buildUserMessage(aiPrompt, pageContext);
+    const newUserMsg: ChatMessage = { role: 'user', content: aiPrompt };
     
-    const fullPrompt = `User Request: ${aiPrompt}\n\n${pageContext ? `Page Context (Use this to find selectors):\n${pageContext}` : ''}`;
-    console.log("Sending to AI:", fullPrompt);
+    // 添加到历史
+    const updatedHistory = [...chatHistory, newUserMsg];
+    setChatHistory(updatedHistory);
+    setShowChat(true);
+    
+    setIsGenerating(true);
+    let generatedCode = '';
 
-    // Simulate AI delay
-    setTimeout(() => {
-      let mockCode = `// AI Response\n`;
-      const lowerPrompt = aiPrompt.toLowerCase();
-      
-      // 简单模拟 AI 生成分步脚本
-      if (lowerPrompt.includes('google') && lowerPrompt.includes('bing')) {
-          mockCode = `
-// === STEP: Google Search (https://www.google.com) ===
-const input = document.querySelector('input[name="q"]');
-if(input) {
-  input.value = "${aiPrompt.replace('google', '').replace('bing', '').trim()}";
-  input.form.submit();
-  window.Pilot.workflow.next();
-}
+    try {
+      // 构建完整的消息历史（包含页面上下文的第一条消息）
+      const messagesForApi: ChatMessage[] = updatedHistory.map((msg, idx) => {
+        if (msg.role === 'user' && idx === updatedHistory.length - 1) {
+          return { role: 'user', content: userMessage };
+        }
+        return msg;
+      });
 
-// === STEP: Bing Search (https://www.bing.com) ===
-const input = document.querySelector('input[name="q"]');
-if(input) {
-  input.value = "Result from Google";
-  window.Pilot.workflow.finish();
-}
-`;
-      } else {
-          mockCode += `console.log("AI executed: ${aiPrompt}");`;
+      for await (const chunk of generateScriptStream(messagesForApi, config)) {
+        generatedCode += chunk;
+        if (currentScript) {
+          setCurrentScript({
+            ...currentScript,
+            code: cleanGeneratedCode(generatedCode)
+          });
+        }
       }
+
+      // 添加助手回复到历史
+      const assistantMsg: ChatMessage = { role: 'assistant', content: generatedCode };
+      setChatHistory([...updatedHistory, assistantMsg]);
       
-      if (currentScript) {
-        setCurrentScript({
-          ...currentScript,
-          code: currentScript.code + '\n\n' + mockCode
-        });
-      }
-      setIsGenerating(false);
       setAiPrompt('');
-    }, 1000);
+    } catch (err: any) {
+      console.error('AI generation failed:', err);
+      // 添加错误消息
+      const errorMsg: ChatMessage = { role: 'assistant', content: `❌ 错误: ${err.message}` };
+      setChatHistory([...updatedHistory, errorMsg]);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
+  const clearChatHistory = () => {
+    setChatHistory([]);
+  };
+
+  // 编辑器视图
   if (view === 'editor' && currentScript) {
     return (
-      <div className="h-screen w-full bg-gray-50 flex flex-col">
-        <header className="p-3 bg-white border-b border-gray-200 flex justify-between items-center sticky top-0 z-10">
+      <div className="h-screen w-full bg-slate-50 flex flex-col">
+        {showSettings && <SettingsPanel onClose={() => { setShowSettings(false); checkApiKey(); }} />}
+        
+        <header className="p-3 bg-white border-b border-slate-200 flex justify-between items-center sticky top-0 z-10">
           <div className="flex items-center gap-2">
-            <button onClick={() => { loadScripts(); setView('list'); }} className="p-1 hover:bg-gray-100 rounded">
-              <ArrowLeft size={20} />
+            <button onClick={() => { loadScripts(); setView('list'); }} className="p-1.5 hover:bg-slate-100 rounded-lg">
+              <ArrowLeft size={18} />
             </button>
-            <input 
-              value={currentScript.name} 
-              onChange={e => setCurrentScript({...currentScript, name: e.target.value})}
-              className="font-bold text-gray-800 bg-transparent border-none focus:ring-0 w-32 truncate"
+            <input
+              value={currentScript.name}
+              onChange={e => setCurrentScript({ ...currentScript, name: e.target.value })}
+              className="font-semibold text-slate-800 bg-transparent border-none focus:ring-0 w-32"
             />
           </div>
           <div className="flex gap-2">
-            <button 
-              onClick={() => handleRun(currentScript)}
-              className="p-2 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 flex items-center gap-1"
-              title="Run Workflow"
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
+              title="设置"
             >
-              <Play size={18} />
-              <span className="text-xs font-semibold">Run</span>
+              <Settings size={18} />
             </button>
-            <button 
+            <button
+              onClick={() => handleRun(currentScript)}
+              className="px-3 py-1.5 text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center gap-1.5 text-sm font-medium"
+            >
+              <Play size={16} />
+              运行
+            </button>
+            <button
               onClick={handleSave}
-              className="p-2 text-green-600 bg-green-50 rounded hover:bg-green-100"
-              title="Save"
+              className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
+              title="保存"
             >
               <Save size={18} />
             </button>
           </div>
         </header>
 
-        <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
-          <div className="flex-1 border border-gray-300 rounded-lg overflow-hidden flex flex-col bg-white shadow-sm">
-             <div className="bg-gray-100 px-4 py-1 text-xs text-gray-500 border-b border-gray-200 flex justify-between">
-                <span>Workflow Editor</span>
-                <span className="text-gray-400">Use // === STEP: Name (Url) === to split steps</span>
-             </div>
+        <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden">
+          {/* 代码编辑器 */}
+          <div className="flex-1 border border-slate-200 rounded-xl overflow-hidden flex flex-col bg-white shadow-sm min-h-0">
+            <div className="bg-slate-50 px-4 py-2 text-xs text-slate-500 border-b border-slate-200 flex justify-between items-center">
+              <span className="font-medium">代码编辑器</span>
+              <button
+                onClick={() => setShowChat(!showChat)}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${showChat ? 'bg-purple-100 text-purple-700' : 'hover:bg-slate-100'}`}
+              >
+                <MessageSquare size={12} />
+                对话 {chatHistory.length > 0 && `(${chatHistory.length})`}
+              </button>
+            </div>
             <textarea
-              className="flex-1 w-full p-4 font-mono text-xs resize-none focus:outline-none leading-relaxed"
+              className="flex-1 w-full p-4 font-mono text-xs resize-none focus:outline-none leading-relaxed text-slate-700"
               value={currentScript.code}
-              onChange={e => setCurrentScript({...currentScript, code: e.target.value})}
+              onChange={e => setCurrentScript({ ...currentScript, code: e.target.value })}
               spellCheck={false}
-              placeholder="// === STEP: Step 1 === ..."
             />
           </div>
-          
-          <div className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col gap-2">
-            <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                <Sparkles size={16} className="text-purple-600" />
-                <span className="text-xs font-semibold text-purple-600">AI Assistant</span>
-                </div>
-                
-                <button 
-                    onClick={capturePageContext}
-                    className="flex items-center gap-1 text-xs px-2 py-1 rounded border bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
-                >
-                    <Eye size={12} />
-                    {pageContext ? 'Context Loaded' : 'Read Page'}
+
+          {/* 对话历史 */}
+          {showChat && chatHistory.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm max-h-40 overflow-hidden flex flex-col">
+              <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <span className="text-xs font-medium text-slate-600">对话历史</span>
+                <button onClick={clearChatHistory} className="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1">
+                  <RotateCcw size={12} />
+                  清空
                 </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                {chatHistory.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`text-xs p-2 rounded-lg ${
+                      msg.role === 'user'
+                        ? 'bg-blue-50 text-blue-800 ml-4'
+                        : 'bg-slate-100 text-slate-700 mr-4'
+                    }`}
+                  >
+                    <div className="font-medium mb-0.5">{msg.role === 'user' ? '你' : 'AI'}</div>
+                    <div className="line-clamp-2">{msg.content.slice(0, 100)}{msg.content.length > 100 ? '...' : ''}</div>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
             </div>
-            
+          )}
+
+          {/* AI 助手 */}
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                  <Sparkles size={14} className="text-white" />
+                </div>
+                <span className="text-sm font-semibold text-slate-700">AI 助手</span>
+                {chatHistory.length > 0 && (
+                  <span className="text-xs text-purple-500 bg-purple-50 px-2 py-0.5 rounded">多轮对话中</span>
+                )}
+              </div>
+
+              <button
+                onClick={capturePageContext}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                  pageContext
+                    ? 'bg-green-50 text-green-700 border-green-200'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <Eye size={14} />
+                {pageContext ? '已读取' : '读取页面'}
+              </button>
+            </div>
+
+            {pageContext && (
+              <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded-lg max-h-16 overflow-auto font-mono">
+                {pageContext.slice(0, 150)}...
+              </div>
+            )}
+
             <div className="flex gap-2">
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={aiPrompt}
                 onChange={e => setAiPrompt(e.target.value)}
-                placeholder="Describe your workflow..."
-                className="flex-1 text-sm border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-purple-400"
-                onKeyDown={e => e.key === 'Enter' && handleAiGenerate()}
+                placeholder={chatHistory.length > 0 ? "继续对话..." : "描述你想要的自动化操作..."}
+                className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing && !isGenerating) {
+                    handleAiGenerate();
+                  }
+                }}
+                disabled={isGenerating}
               />
-              <button 
+              <button
                 onClick={handleAiGenerate}
                 disabled={isGenerating}
-                className="bg-purple-600 text-white px-4 py-2 rounded text-sm hover:bg-purple-700 disabled:opacity-50"
+                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg text-sm hover:opacity-90 transition-opacity font-medium disabled:opacity-50"
               >
-                Send
+                {isGenerating ? '...' : '发送'}
               </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+              {currentModel.thinking && <Brain size={10} className="text-purple-500" />}
+              <span>{currentModel.name}</span>
+              <span className="text-slate-300">·</span>
+              <span className="text-purple-500">{currentModel.context} context</span>
             </div>
           </div>
         </div>
@@ -365,47 +530,69 @@ if(input) {
     );
   }
 
+  // 列表视图
   return (
-    <div className="h-screen w-full bg-gray-50 flex flex-col">
-      <header className="p-4 bg-white border-b border-gray-200 shadow-sm flex justify-between items-center sticky top-0 z-10">
-        <h1 className="text-lg font-bold text-gray-800">Pilot Scripts</h1>
-        <button 
+    <div className="h-screen w-full bg-slate-50 flex flex-col">
+      {showSettings && <SettingsPanel onClose={() => { setShowSettings(false); checkApiKey(); }} />}
+
+      <header className="p-4 bg-white border-b border-slate-200 flex justify-between items-center sticky top-0 z-10">
+        <h1 className="text-lg font-bold text-slate-800">Pilot</h1>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
+            title="设置"
+          >
+            <Settings size={20} />
+          </button>
+          <button
             onClick={handleCreateNew}
-            className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow-md"
-        >
+            className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
             <Plus size={20} />
-        </button>
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto p-4 space-y-3">
+        {!hasApiKey && (
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4 text-sm">
+            <div className="flex items-center gap-2 font-semibold text-purple-800 mb-1">
+              <Sparkles size={16} />
+              配置 AI 开始使用
+            </div>
+            <p className="text-purple-600 text-xs">
+              点击设置按钮，输入 OpenRouter API Key
+            </p>
+          </div>
+        )}
+
         {scripts.map(script => (
-          <div 
-            key={script.id} 
+          <div
+            key={script.id}
             onClick={() => handleEdit(script)}
-            className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:border-blue-400 transition-all cursor-pointer group"
+            className="bg-white p-4 rounded-xl border border-slate-200 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group"
           >
             <div className="flex justify-between items-start mb-2">
-              <h3 className="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">{script.name}</h3>
+              <h3 className="font-semibold text-slate-800 group-hover:text-blue-600">{script.name}</h3>
               <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                <button 
+                <button
                   onClick={() => handleRun(script)}
-                  className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
-                  title="Run now"
+                  className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg"
                 >
                   <Play size={16} />
                 </button>
-                <button 
+                <button
                   onClick={(e) => handleDelete(e, script.id)}
-                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                  title="Delete"
+                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                 >
                   <Trash2 size={16} />
                 </button>
               </div>
             </div>
-            <p className="text-sm text-gray-500 line-clamp-2">{script.description || 'No description'}</p>
-            <div className="mt-2 text-xs text-gray-400">
-              Updated: {new Date(script.updatedAt).toLocaleDateString()}
+            <p className="text-sm text-slate-500 line-clamp-2">{script.description || '无描述'}</p>
+            <div className="mt-2 text-xs text-slate-400">
+              {new Date(script.updatedAt).toLocaleDateString()}
             </div>
           </div>
         ))}
