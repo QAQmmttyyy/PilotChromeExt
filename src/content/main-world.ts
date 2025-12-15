@@ -1,15 +1,20 @@
-// 这个脚本直接运行在页面上下文 (Main World)
-console.log('Pilot Main World script loaded');
+// Main World Content Script
+// Pilot: Pure Bridge - 只做通信，不管业务逻辑
+console.log('Pilot Bridge (Main World) loaded');
 
 window.Pilot = {
-  openTab: (url: string) => window.postMessage({ source: 'PILOT_SCRIPT', action: 'openTab', payload: { url } }, '*'),
-  log: (msg: string) => console.log('[Pilot Script]', msg),
-  setData: (key: string, value: any) => window.postMessage({ source: 'PILOT_SCRIPT', action: 'setData', payload: { key, value } }, '*'),
-  getData: (_key: string) => console.warn('Pilot.getData not implemented yet'),
-
+  // 浏览器能力
+  openTab: (url: string) => {
+    window.postMessage({ source: 'PILOT_SCRIPT', action: 'openTab', payload: { url } }, '*');
+  },
+  
+  // 日志
+  log: (msg: string) => console.log('[Pilot]', msg),
+  
+  // 工作流控制（异步通信/发布订阅）
   workflow: {
     next: (data?: any) => {
-      console.log('[Pilot Workflow] Step completed, signalling background...');
+      console.log('[Pilot] Step completed, signaling...');
       window.postMessage({ 
         source: 'PILOT_SCRIPT', 
         action: 'workflowNext', 
@@ -17,29 +22,12 @@ window.Pilot = {
       }, '*');
     },
     finish: () => {
+      console.log('[Pilot] Workflow finished');
       window.postMessage({ source: 'PILOT_SCRIPT', action: 'workflowFinish', payload: {} }, '*');
     },
     fail: (reason: string) => {
-      console.error('[Pilot Workflow] Step FAILED:', reason);
+      console.error('[Pilot] Workflow FAILED:', reason);
       window.postMessage({ source: 'PILOT_SCRIPT', action: 'workflowFail', payload: { reason } }, '*');
     }
-  },
-
-  // 工具函数：轮询等待元素出现
-  waitFor: (selector: string, timeout = 10000): Promise<Element> => {
-    return new Promise((resolve, reject) => {
-      const startTime = Date.now();
-      const check = () => {
-        const el = document.querySelector(selector);
-        if (el) {
-          resolve(el);
-        } else if (Date.now() - startTime > timeout) {
-          reject(new Error(`超时: 未找到元素 "${selector}" (${timeout}ms)`));
-        } else {
-          setTimeout(check, 200);
-        }
-      };
-      check();
-    });
   }
 };

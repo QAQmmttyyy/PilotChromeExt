@@ -25,7 +25,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.ts-XjTYuwm-.js"
+        "assets/index.ts-CfxWpJIW.js"
       ],
       "matches": [
         "<all_urls>"
@@ -34,7 +34,7 @@
     },
     {
       "js": [
-        "assets/main-world.ts-aFBQRgIK.js"
+        "assets/main-world.ts-BXhvLeFW.js"
       ],
       "matches": [
         "<all_urls>"
@@ -49,8 +49,8 @@
         "<all_urls>"
       ],
       "resources": [
-        "assets/index.ts-XjTYuwm-.js",
-        "assets/main-world.ts-aFBQRgIK.js"
+        "assets/index.ts-CfxWpJIW.js",
+        "assets/main-world.ts-BXhvLeFW.js"
       ],
       "use_dynamic_url": false
     }

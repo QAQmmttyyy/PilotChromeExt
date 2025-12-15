@@ -1,7 +1,8 @@
 // Isolated World Content Script
-console.log('Pilot content script (Isolated) loaded');
+// Pilot: Pure Bridge - 只做通信，不管业务逻辑
+console.log('Pilot Bridge (Isolated World) loaded');
 
-// 1. 监听来自页面脚本(Main World)的消息
+// 1. 监听来自 Main World 的消息
 window.addEventListener('message', (event) => {
   if (event.source !== window || !event.data || event.data.source !== 'PILOT_SCRIPT') {
     return;
@@ -14,8 +15,9 @@ window.addEventListener('message', (event) => {
   }).catch(err => console.error('Pilot Bridge Error:', err));
 });
 
-// 2. 为 Isolated World 注入 Pilot API
+// 2. Pilot API for Isolated World (Pure Bridge)
 (window as any).Pilot = {
+  // 浏览器能力
   openTab: (url: string) => {
     chrome.runtime.sendMessage({ 
       type: 'PILOT_BRIDGE_ACTION', 
@@ -24,16 +26,10 @@ window.addEventListener('message', (event) => {
     });
   },
   
-  log: (msg: string) => console.log('[Pilot Script Isolated]', msg),
+  // 日志
+  log: (msg: string) => console.log('[Pilot]', msg),
   
-  setData: (key: string, value: any) => {
-    chrome.runtime.sendMessage({ 
-      type: 'PILOT_BRIDGE_ACTION', 
-      action: 'setData', 
-      payload: { key, value } 
-    });
-  },
-
+  // 工作流控制（异步通信）
   workflow: {
     next: (data?: any) => {
       chrome.runtime.sendMessage({ 
@@ -56,23 +52,5 @@ window.addEventListener('message', (event) => {
         payload: { reason } 
       });
     }
-  },
-
-  // 工具函数：轮询等待元素出现
-  waitFor: (selector: string, timeout = 10000): Promise<Element> => {
-    return new Promise((resolve, reject) => {
-      const startTime = Date.now();
-      const check = () => {
-        const el = document.querySelector(selector);
-        if (el) {
-          resolve(el);
-        } else if (Date.now() - startTime > timeout) {
-          reject(new Error(`超时: 未找到元素 "${selector}" (${timeout}ms)`));
-        } else {
-          setTimeout(check, 200);
-        }
-      };
-      check();
-    });
   }
 };

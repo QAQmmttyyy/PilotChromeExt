@@ -7,50 +7,73 @@ import { parseScriptToWorkflow } from '../lib/parser';
 const SEED_SCRIPT: Script = {
   id: 'baidu-google-workflow',
   name: '百度 -> Google 搜索',
-  description: '在百度搜索，提取结果，再去 Google 搜索（健壮版）',
-  code: `// === STEP: 在百度搜索 (https://www.baidu.com) ===
+  description: 'AI 生成的完整脚本示例：工具函数 + 业务逻辑',
+  code: `// ============================================
+// 工具函数（AI 根据需要生成）
+// ============================================
+function waitForElement(selector, timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    const check = () => {
+      const el = document.querySelector(selector);
+      if (el) {
+        resolve(el);
+      } else if (Date.now() - startTime > timeout) {
+        reject(new Error(\`超时: 未找到元素 "\${selector}" (\${timeout}ms)\`));
+      } else {
+        setTimeout(check, 200);
+      }
+    };
+    check();
+  });
+}
+
+// ============================================
+// === STEP: 在百度搜索 (https://www.baidu.com) ===
+// ============================================
 (async () => {
   try {
-    // 等待搜索框出现
-    console.log('[Pilot] 等待百度搜索框...');
-    const input = await window.Pilot.waitFor('#kw, input[name="wd"]', 5000);
+    console.log('[Step 1] 等待百度搜索框...');
+    const input = await waitForElement('#kw, input[name="wd"]', 5000);
     
-    console.log('[Pilot] ✓ 找到搜索框');
+    console.log('[Step 1] ✓ 找到搜索框');
     input.value = "Chrome Extension Development";
     input.dispatchEvent(new Event('input', {bubbles: true}));
     
-    // 等待搜索按钮
-    const btn = await window.Pilot.waitFor('#su, input[type="submit"]', 3000);
-    console.log('[Pilot] ✓ 找到搜索按钮，点击...');
+    const btn = await waitForElement('#su, input[type="submit"]', 3000);
+    console.log('[Step 1] ✓ 点击搜索按钮');
     btn.click();
     
-    // 成功，传递数据给下一步
+    // 通知 Pilot：步骤完成
     window.Pilot.workflow.next({ searchTerm: "Chrome Extension" });
   } catch (err) {
     window.Pilot.workflow.fail('百度首页: ' + err.message);
   }
 })();
 
+// ============================================
 // === STEP: 提取百度结果 (https://www.baidu.com/s) ===
+// ============================================
 (async () => {
   try {
-    console.log('[Pilot] 等待百度搜索结果...');
-    // 等待结果列表出现
-    const firstResult = await window.Pilot.waitFor('h3.c-title a, .result h3 a, .c-title a', 8000);
+    console.log('[Step 2] 等待百度搜索结果...');
+    const firstResult = await waitForElement('h3.c-title a, .result h3 a, .c-title a', 8000);
     
     const title = firstResult.innerText.trim();
     if (!title) {
       throw new Error('提取到的标题为空');
     }
     
-    console.log('[Pilot] ✓ 提取到标题:', title);
+    console.log('[Step 2] ✓ 提取到:', title);
     window.Pilot.workflow.next({ baiduTitle: title });
   } catch (err) {
     window.Pilot.workflow.fail('百度结果页: ' + err.message);
   }
 })();
 
+// ============================================
 // === STEP: 去 Google 搜索 (https://www.google.com) ===
+// ============================================
 (async () => {
   try {
     const data = window.PilotData || {};
@@ -60,14 +83,14 @@ const SEED_SCRIPT: Script = {
       throw new Error('没有从上一步获取到搜索词');
     }
     
-    console.log('[Pilot] 等待 Google 搜索框...');
-    const googleInput = await window.Pilot.waitFor('textarea[name="q"], input[name="q"]', 5000);
+    console.log('[Step 3] 等待 Google 搜索框...');
+    const googleInput = await waitForElement('textarea[name="q"], input[name="q"]', 5000);
     
     googleInput.value = query;
     googleInput.dispatchEvent(new Event('input', {bubbles: true}));
     
-    console.log('[Pilot] ✓ 已填入 Google 搜索框');
-    alert('✅ Workflow 完成！\\n\\n从百度提取: ' + query + '\\n已填入 Google 搜索框');
+    console.log('[Step 3] ✅ 完成！已填入:', query);
+    alert(\`✅ Workflow 完成！\\n\\n从百度提取: \${query}\\n已填入 Google 搜索框\`);
     window.Pilot.workflow.finish();
   } catch (err) {
     window.Pilot.workflow.fail('Google 页面: ' + err.message);
