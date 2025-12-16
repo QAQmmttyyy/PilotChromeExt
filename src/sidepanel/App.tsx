@@ -178,6 +178,7 @@ function App() {
   const [showChat, setShowChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [currentModel, setCurrentModel] = useState(AVAILABLE_MODELS[0]);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
     loadScripts();
@@ -234,7 +235,10 @@ function App() {
   };
 
   const handleSave = async () => {
-    if (currentScript) {
+    if (!currentScript) return;
+    
+    setSaveStatus('saving');
+    try {
       const updatedScript = { ...currentScript, updatedAt: Date.now() };
       await storage.saveScript(updatedScript);
       setScripts(prev => {
@@ -246,6 +250,12 @@ function App() {
         }
         return [...prev, updatedScript];
       });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 1500);
+    } catch (err) {
+      console.error('Save failed:', err);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 2000);
     }
   };
 
@@ -405,10 +415,19 @@ function App() {
             </button>
             <button
               onClick={handleSave}
-              className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
+              disabled={saveStatus === 'saving'}
+              className={`p-2 rounded-lg flex items-center gap-1 text-sm transition-colors ${
+                saveStatus === 'saved' ? 'text-green-600 bg-green-50' :
+                saveStatus === 'error' ? 'text-red-600 bg-red-50' :
+                saveStatus === 'saving' ? 'text-slate-400' :
+                'text-green-600 hover:bg-green-50'
+              }`}
               title="保存"
             >
               <Save size={18} />
+              {saveStatus === 'saving' && <span className="text-xs">...</span>}
+              {saveStatus === 'saved' && <span className="text-xs">✓</span>}
+              {saveStatus === 'error' && <span className="text-xs">✗</span>}
             </button>
           </div>
         </header>
