@@ -1,5 +1,7 @@
 // AI Service - OpenRouter 接入（支持流式输出 + 多轮对话）
 
+import { RecordingSession, RecordedStep } from './types';
+
 export interface AIModel {
   id: string;
   name: string;
@@ -54,51 +56,58 @@ export interface ChatMessage {
 
 const DEFAULT_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 
-// 系统提示词
-const SYSTEM_PROMPT = `你是 Pilot 浏览器自动化脚本生成器。生成精简、健壮、可直接运行的 JavaScript。
+// 系统提示词（强约束：让模型更“守规矩”，并显式利用 pageContext）
+const SYSTEM_PROMPT = `
 
-## 核心规则
+## 输入约定（非常重要）
 
-1. **纯 JS**：禁止 TypeScript 语法（as、类型注解等）
+用户消息可能包含：
+- <<PAGE_CONTEXT>>
+- <<END_PAGE_CONTEXT>>
 
-2. **选择器优先级**（从高到低）：
-   - id: \`#searchBox\`
-   - name/aria: \`[name="q"]\`, \`[aria-label="搜索"]\`
-   - 语义标签: \`input[type="search"]\`
-   - 稳定类名（避免混淆类名如 \`.plR5qb\`）
-   - 必须提供备选: \`'#kw, input[name="wd"], .search-input'\`
+PAGE_CONTEXT 是当前页面可操作元素的提取结果（包含 [uid]、属性、文本）。当它存在时：
+- **优先从 PAGE_CONTEXT 里挑选元素与选择器**，不要凭空"猜"选择器。
+- 如果 PAGE_CONTEXT 里没有目标元素，再退而求其次用稳定属性（id/name/aria-label/role/语义标签）构造选择器，并提供备选。
 
-3. **等待元素**：禁止用 setTimeout 等待元素出现，必须用轮询或 MutationObserver
-   \`\`\`
-   const waitFor = (s, t=8000) => new Promise((r,j) => {
-     const e = document.querySelector(s); if(e) return r(e);
-     const o = new MutationObserver(() => { const e = document.querySelector(s); if(e){o.disconnect();r(e);} });
-     o.observe(document.body, {childList:true, subtree:true});
-     setTimeout(() => {o.disconnect(); j(new Error('超时:'+s));}, t);
-   });
-   \`\`\`
+用户消息也可能包含：
+- <<RECORDING_CONTEXT>>
+- <<END_RECORDING_CONTEXT>>
 
-4. **工具函数**：定义了就必须使用，不用就不要定义
+RECORDING_CONTEXT 是用户录制的操作流程，包含每一步的操作类型、元素信息、选择器候选等。当它存在时：
+- **严格按照录制的步骤顺序生成脚本**，确保每一步都对应录制中的操作。
+- **优先使用录制中提供的选择器候选**，它们是从实际 DOM 中提取的，更可靠。
+- 如果录制包含多页面导航，使用 \`// === STEP:\` 格式分隔不同页面的步骤。
+- 录制中的元素信息可能不完整，但选择器候选通常是准确的。
+## 输出契约（必须满足）
 
-5. **流程控制**：
-   - \`window.Pilot.workflow.finish()\` - 单步脚本或最后一步
-   - \`window.Pilot.workflow.next(data)\` - 多步骤时传递数据到下一步
-   - \`window.Pilot.workflow.fail(reason)\` - 任何错误
+1. **只输出纯 JavaScript 代码**：禁止 TypeScript（as、类型注解、interface、泛型等）。
+2. **只输出代码**：禁止解释、禁止 markdown 代码块、禁止前后缀文字。输出必须以 \`// === STEP:\` 或 \`(async () =>\` 开头。
+3. **选择器必须可被 querySelector 执行**：
+   - 禁止非标准伪类：\`:has-text()\`、\`:contains()\`、\`:text()\`、\`:has()\` 等一律禁止。
+   - 允许的策略：\`#id\`、\`[name="..."]\`、\`[aria-label="..."]\`、\`[role="..."]\`、语义标签 + 属性。
+   - 当存在多个备选时，用逗号合并（\`'a, b, c'\`），并优先靠稳定属性排序。
+4. **等待机制**：禁止用 setTimeout“猜时间”等待页面/元素出现。
+   - 需要等待时，必须在脚本顶部定义 \`waitFor(selector, timeout)\`（轮询或 MutationObserver 均可），并在实际等待处使用它。
+   - 不需要等待就不要定义 waitFor。
+5. **错误必须终止流程**：任意一步失败都调用 \`window.Pilot.workflow.fail(reason)\` 并 return。
+6. **流程收尾必须明确**：
+   - 单步：\`finish()\`
+   - 多步：中间用 \`next(data)\`，最后一步用 \`finish()\`
+7. **多步骤格式**：用顶层注释分隔：
+   \`// === STEP: 名称 (https://目标URL可选) ===\`
+   注释必须在顶层，不能写在函数内部。
 
-6. **多步骤格式**：STEP 注释必须在顶层代码，不在函数内部
-   \`\`\`
-   // === STEP: 步骤1 (https://site.com) ===
-   (async () => { ... window.Pilot.workflow.next({data}); })();
-   
-   // === STEP: 步骤2 (https://site.com/page) ===
-   (async () => { ... window.Pilot.workflow.finish(); })();
-   \`\`\`
+## 生成前自检（必须逐条满足，勿输出自检内容）
 
-7. **错误处理**：所有异步操作用 try/catch，catch 中调用 fail()
+- 输出是否只有代码、且首行符合规则？
+- 是否包含 TS 语法或非标准选择器？（必须为否）
+- 是否有 setTimeout 作为等待？（必须为否；仅允许作为 waitFor 的超时机制）
+- 是否所有分支最终会 finish/next/fail 之一？
+- 是否在 PAGE_CONTEXT 存在时优先使用其中的元素/属性？
 
 ## 输出
 
-直接输出可执行代码，不要解释，不要 markdown 代码块。`;
+只输出可执行 JavaScript。`;
 
 // 流式生成（支持多轮对话）
 export async function* generateScriptStream(
@@ -119,7 +128,7 @@ export async function* generateScriptStream(
         { role: 'system', content: SYSTEM_PROMPT },
         ...messages
       ],
-      temperature: 0.7,
+      // temperature: 0.7,
       stream: true
       // 不设置 max_tokens，让模型自己决定
     })
@@ -166,15 +175,110 @@ export async function* generateScriptStream(
 // 构建用户消息（包含页面上下文）
 export function buildUserMessage(prompt: string, pageContext?: string): string {
   if (pageContext) {
+    // 检测是否是录制上下文
+    if (pageContext.startsWith('<<RECORDING_CONTEXT>>')) {
+      return `${pageContext}\n\n用户需求:\n${prompt}`;
+    }
     return `当前页面信息:\n${pageContext}\n\n用户需求:\n${prompt}`;
   }
   return prompt;
 }
 
+// 将录制步骤转换为描述
+function formatRecordedStep(step: RecordedStep, index: number): string {
+  const lines: string[] = [];
+  lines.push(`Step ${index + 1}: ${getStepTypeName(step.type)}`);
+  lines.push(`- URL: ${step.url}`);
+  lines.push(`- 页面: ${step.pageTitle}`);
+  
+  if (step.element) {
+    const el = step.element;
+    const attrsStr = Object.entries(el.attributes)
+      .map(([k, v]) => `${k}="${v}"`)
+      .join(' ');
+    lines.push(`- 元素: <${el.tag}${attrsStr ? ' ' + attrsStr : ''}>${el.text}</${el.tag}>`);
+    lines.push(`- 选择器候选: ${el.selectors.slice(0, 5).join(', ')}`);
+  }
+  
+  if (step.value !== undefined) {
+    lines.push(`- 输入值: "${step.value}"`);
+  }
+  
+  if (step.key) {
+    lines.push(`- 按键: ${step.key}`);
+  }
+  
+  return lines.join('\n');
+}
+
+function getStepTypeName(type: RecordedStep['type']): string {
+  const names: Record<RecordedStep['type'], string> = {
+    click: '点击',
+    input: '输入',
+    navigate: '页面导航',
+    submit: '提交表单',
+    select: '选择下拉框',
+    keypress: '按键',
+  };
+  return names[type] || type;
+}
+
+// 构建录制上下文
+export function buildRecordingContext(session: RecordingSession): string {
+  const lines: string[] = [];
+  lines.push('<<RECORDING_CONTEXT>>');
+  lines.push(`录制名称: ${session.name}`);
+  lines.push(`起始 URL: ${session.startUrl}`);
+  lines.push(`步骤数量: ${session.steps.length}`);
+  lines.push('');
+  lines.push('## 录制的操作流程');
+  lines.push('');
+  
+  // 按 URL 分组步骤
+  let currentUrl = '';
+  session.steps.forEach((step, idx) => {
+    if (step.url !== currentUrl) {
+      if (currentUrl) lines.push('');
+      lines.push(`### 页面: ${step.url}`);
+      currentUrl = step.url;
+    }
+    lines.push('');
+    lines.push(formatRecordedStep(step, idx));
+  });
+  
+  lines.push('');
+  lines.push('<<END_RECORDING_CONTEXT>>');
+  
+  return lines.join('\n');
+}
+
 // 清理生成的代码（移除可能的 markdown 包裹）
 export function cleanGeneratedCode(code: string): string {
-  let cleaned = code.replace(/^```(?:javascript|js)?\n?/, '');
-  cleaned = cleaned.replace(/\n?```$/, '');
+  let cleaned = code;
+
+  // 去掉 markdown 包裹
+  cleaned = cleaned.replace(/^```(?:javascript|js)?\s*\n?/i, '');
+  cleaned = cleaned.replace(/\n?```\s*$/i, '');
+
+  // 如果模型仍输出了解释，尽量从第一个“看起来像代码”的位置开始截断
+  const anchors = [
+    '// === STEP:',
+    '(async () =>',
+    ';(async () =>',
+    '(() =>',
+    ';(() =>',
+    'const ',
+    'let ',
+    'var ',
+    'function ',
+  ];
+  let idx = -1;
+  for (const a of anchors) {
+    const i = cleaned.indexOf(a);
+    if (i >= 0 && (idx === -1 || i < idx)) idx = i;
+  }
+  if (idx > 0) cleaned = cleaned.slice(idx);
+
   return cleaned.trim();
 }
 

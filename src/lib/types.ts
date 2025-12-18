@@ -14,3 +14,56 @@ export interface WorkflowContext {
   status: 'idle' | 'running' | 'paused' | 'completed' | 'failed';
 }
 
+// ============== Recording Types ==============
+
+export type RecordedStepType = 'click' | 'input' | 'navigate' | 'submit' | 'select' | 'keypress';
+
+export interface RecordedElement {
+  tag: string;
+  text: string;
+  selectors: string[];
+  attributes: Record<string, string>;
+  boundingRect?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
+
+export interface RecordedStep {
+  id: string;
+  timestamp: number;
+  type: RecordedStepType;
+  url: string;
+  pageTitle: string;
+  element?: RecordedElement;
+  value?: string;
+  key?: string;
+}
+
+export interface RecordingSession {
+  id: string;
+  name: string;
+  startUrl: string;
+  startTime: number;
+  steps: RecordedStep[];
+  status: 'recording' | 'paused' | 'stopped';
+  tabId: number;
+}
+
+// Recording 消息类型
+export interface RecordingMessage {
+  type: 'RECORDING_START' | 'RECORDING_STOP' | 'RECORDING_PAUSE' | 'RECORDING_STEP' | 'RECORDING_STATUS' | 'RECORDING_GET_SESSION' | 'RECORDING_DELETE_STEP' | 'RECORDING_CLEAR';
+  payload?: any;
+}
+
+export interface RecordingStepPayload {
+  type: RecordedStepType;
+  url: string;
+  pageTitle: string;
+  element?: RecordedElement;
+  value?: string;
+  key?: string;
+}
+

@@ -7,7 +7,9 @@
     "activeTab",
     "scripting",
     "storage",
-    "sidePanel"
+    "sidePanel",
+    "webNavigation",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -25,7 +27,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.ts-CfxWpJIW.js"
+        "assets/index.ts-BQVWp27z.js"
       ],
       "matches": [
         "<all_urls>"
@@ -49,7 +51,7 @@
         "<all_urls>"
       ],
       "resources": [
-        "assets/index.ts-CfxWpJIW.js",
+        "assets/index.ts-BQVWp27z.js",
         "assets/main-world.ts-BXhvLeFW.js"
       ],
       "use_dynamic_url": false

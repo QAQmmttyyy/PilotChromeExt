@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Plus, Trash2, ArrowLeft, Save, Sparkles, Eye, Settings, X, MessageSquare, RotateCcw, Brain } from 'lucide-react';
+import { Play, Plus, Trash2, ArrowLeft, Save, Sparkles, Settings, X, MessageSquare, RotateCcw, Brain, Circle, Square, Pause, Mouse, Type, Navigation, Key, List } from 'lucide-react';
 import { Script, storage } from '../lib/storage';
 import { parseScriptToWorkflow } from '../lib/parser';
-import { generateScriptStream, cleanGeneratedCode, buildUserMessage, AVAILABLE_MODELS, ChatMessage, getModelInfo } from '../lib/ai';
+import { generateScriptStream, cleanGeneratedCode, buildUserMessage, buildRecordingContext, AVAILABLE_MODELS, ChatMessage, getModelInfo } from '../lib/ai';
 import { settings } from '../lib/settings';
+import { RecordingSession, RecordedStep } from '../lib/types';
 
 // Seed data
 const SEED_SCRIPT: Script = {
@@ -48,6 +49,174 @@ const SEED_SCRIPT: Script = {
   createdAt: Date.now(),
   updatedAt: Date.now()
 };
+
+// 录制步骤图标
+function StepIcon({ type }: { type: RecordedStep['type'] }) {
+  switch (type) {
+    case 'click':
+      return <Mouse size={12} className="text-blue-500" />;
+    case 'input':
+      return <Type size={12} className="text-green-500" />;
+    case 'navigate':
+      return <Navigation size={12} className="text-purple-500" />;
+    case 'submit':
+      return <Play size={12} className="text-orange-500" />;
+    case 'select':
+      return <List size={12} className="text-cyan-500" />;
+    case 'keypress':
+      return <Key size={12} className="text-pink-500" />;
+    default:
+      return <Circle size={12} className="text-slate-400" />;
+  }
+}
+
+// 录制步骤描述
+function getStepDescription(step: RecordedStep): string {
+  switch (step.type) {
+    case 'click':
+      return `点击 <${step.element?.tag}> ${step.element?.text?.slice(0, 20) || ''}`;
+    case 'input':
+      return `输入 "${step.value?.slice(0, 15) || ''}${(step.value?.length || 0) > 15 ? '...' : ''}"`;
+    case 'navigate':
+      return `打开 ${new URL(step.url).hostname}${new URL(step.url).pathname.slice(0, 20)}`;
+    case 'submit':
+      return `提交表单`;
+    case 'select':
+      return `选择 "${step.value}"`;
+    case 'keypress':
+      return `按键 ${step.key}`;
+    default:
+      return step.type;
+  }
+}
+
+// 录制面板组件
+function RecordingPanel({ 
+  session, 
+  onStart, 
+  onStop, 
+  onPause,
+  onResume,
+  onDeleteStep, 
+  onClear,
+  onUseRecording
+}: { 
+  session: RecordingSession | null;
+  onStart: () => void;
+  onStop: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  onDeleteStep: (stepId: string) => void;
+  onClear: () => void;
+  onUseRecording: () => void;
+}) {
+  const isRecording = session?.status === 'recording';
+  const isPaused = session?.status === 'paused';
+  const hasSteps = session && session.steps.length > 0;
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : isPaused ? 'bg-yellow-500' : 'bg-slate-300'}`} />
+          <span className="text-sm font-medium text-slate-700">
+            {isRecording ? '录制中' : isPaused ? '已暂停' : '录制操作'}
+          </span>
+          {hasSteps && (
+            <span className="text-xs text-slate-400">({session.steps.length} 步)</span>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-1">
+          {!session || session.status === 'stopped' ? (
+            <button
+              onClick={onStart}
+              className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors"
+            >
+              <Circle size={10} className="fill-current" />
+              开始
+            </button>
+          ) : (
+            <>
+              {isRecording ? (
+                <button
+                  onClick={onPause}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-yellow-500 text-white text-xs rounded-lg hover:bg-yellow-600 transition-colors"
+                >
+                  <Pause size={12} />
+                  暂停
+                </button>
+              ) : (
+                <button
+                  onClick={onResume}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-green-500 text-white text-xs rounded-lg hover:bg-green-600 transition-colors"
+                >
+                  <Play size={12} />
+                  继续
+                </button>
+              )}
+              <button
+                onClick={onStop}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-600 text-white text-xs rounded-lg hover:bg-slate-700 transition-colors"
+              >
+                <Square size={10} className="fill-current" />
+                停止
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      
+      {hasSteps && (
+        <>
+          <div className="max-h-48 overflow-y-auto">
+            {session.steps.map((step, idx) => (
+              <div
+                key={step.id}
+                className="flex items-center gap-2 px-4 py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 group"
+              >
+                <span className="text-xs text-slate-400 w-4">{idx + 1}</span>
+                <StepIcon type={step.type} />
+                <span className="flex-1 text-xs text-slate-600 truncate">
+                  {getStepDescription(step)}
+                </span>
+                <button
+                  onClick={() => onDeleteStep(step.id)}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-opacity"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+          
+          <div className="px-4 py-2 border-t border-slate-100 flex justify-between items-center bg-slate-50">
+            <button
+              onClick={onClear}
+              className="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1"
+            >
+              <Trash2 size={12} />
+              清空
+            </button>
+            <button
+              onClick={onUseRecording}
+              className="flex items-center gap-1 px-3 py-1.5 bg-purple-500 text-white text-xs rounded-lg hover:bg-purple-600 transition-colors"
+            >
+              <Sparkles size={12} />
+              用于生成
+            </button>
+          </div>
+        </>
+      )}
+      
+      {!hasSteps && !isRecording && (
+        <div className="px-4 py-6 text-center text-xs text-slate-400">
+          点击"开始"录制你的操作流程
+        </div>
+      )}
+    </div>
+  );
+}
 
 // 设置面板
 function SettingsPanel({ onClose }: { onClose: () => void }) {
@@ -169,7 +338,6 @@ function App() {
   const [currentScript, setCurrentScript] = useState<Script | null>(null);
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [pageContext, setPageContext] = useState<string>('');
   const [showSettings, setShowSettings] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
   
@@ -179,11 +347,122 @@ function App() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [currentModel, setCurrentModel] = useState(AVAILABLE_MODELS[0]);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  
+  // Recording
+  const [recordingSession, setRecordingSession] = useState<RecordingSession | null>(null);
+  const [recordingContext, setRecordingContext] = useState<string>('');
 
   useEffect(() => {
     loadScripts();
     checkApiKey();
+    loadRecordingSession();
+    
+    // 监听录制更新
+    const handleMessage = (message: any) => {
+      if (message.type === 'RECORDING_SESSION_UPDATE') {
+        setRecordingSession(message.payload);
+      }
+    };
+    chrome.runtime.onMessage.addListener(handleMessage);
+    return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, []);
+  
+  const loadRecordingSession = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'RECORDING_GET_SESSION' });
+      if (response?.session) {
+        setRecordingSession(response.session);
+      }
+    } catch (e) {
+      console.warn('Failed to load recording session:', e);
+    }
+  };
+  
+  const handleStartRecording = async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab.id) return;
+    
+    if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://')) {
+      alert('无法在此页面录制，请打开一个普通网页');
+      return;
+    }
+    
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'RECORDING_START',
+        payload: { tabId: tab.id }
+      });
+      if (response?.session) {
+        setRecordingSession(response.session);
+      }
+    } catch (e) {
+      console.error('Failed to start recording:', e);
+    }
+  };
+  
+  const handleStopRecording = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'RECORDING_STOP' });
+      if (response?.session) {
+        setRecordingSession(response.session);
+      }
+    } catch (e) {
+      console.error('Failed to stop recording:', e);
+    }
+  };
+  
+  const handlePauseRecording = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'RECORDING_PAUSE' });
+      if (response?.session) {
+        setRecordingSession(response.session);
+      }
+    } catch (e) {
+      console.error('Failed to pause recording:', e);
+    }
+  };
+  
+  const handleResumeRecording = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'RECORDING_RESUME' });
+      if (response?.session) {
+        setRecordingSession(response.session);
+      }
+    } catch (e) {
+      console.error('Failed to resume recording:', e);
+    }
+  };
+  
+  const handleDeleteStep = async (stepId: string) => {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'RECORDING_DELETE_STEP',
+        payload: { stepId }
+      });
+      if (response?.session) {
+        setRecordingSession(response.session);
+      }
+    } catch (e) {
+      console.error('Failed to delete step:', e);
+    }
+  };
+  
+  const handleClearRecording = async () => {
+    try {
+      await chrome.runtime.sendMessage({ type: 'RECORDING_CLEAR' });
+      setRecordingSession(null);
+      setRecordingContext('');
+    } catch (e) {
+      console.error('Failed to clear recording:', e);
+    }
+  };
+  
+  const handleUseRecording = () => {
+    if (!recordingSession || recordingSession.steps.length === 0) return;
+    
+    const context = buildRecordingContext(recordingSession);
+    setRecordingContext(context);
+  };
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -284,44 +563,6 @@ function App() {
     }
   };
 
-  const capturePageContext = async () => {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab.id) return;
-
-    try {
-      const results = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: () => {
-          const elements = Array.from(document.querySelectorAll('button, a, input, textarea, form, [role="button"], select'));
-          const simplified = elements.slice(0, 60).map(el => {
-            const tag = el.tagName.toLowerCase();
-            const id = el.id ? `#${el.id}` : '';
-            const cls = el.className && typeof el.className === 'string' ? `.${el.className.split(' ').slice(0, 2).join('.')}` : '';
-            const text = (el as HTMLElement).innerText?.slice(0, 30).replace(/\n/g, ' ').trim() || '';
-            const placeholder = (el as HTMLInputElement).placeholder || '';
-            const type = (el as HTMLInputElement).type ? `[type="${(el as HTMLInputElement).type}"]` : '';
-            const name = (el as HTMLInputElement).name ? `[name="${(el as HTMLInputElement).name}"]` : '';
-            return `${tag}${id}${cls}${type}${name} "${text || placeholder}"`.trim();
-          }).join('\n');
-
-          return {
-            title: document.title,
-            url: location.href,
-            dom: simplified
-          };
-        }
-      });
-
-      if (results[0]?.result) {
-        const ctx = results[0].result;
-        setPageContext(`页面: ${ctx.title}\nURL: ${ctx.url}\n\n可交互元素:\n${ctx.dom}`);
-      }
-    } catch (err) {
-      console.error('Failed to capture context', err);
-      alert('无法读取页面');
-    }
-  };
-
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
 
@@ -331,8 +572,8 @@ function App() {
       return;
     }
 
-    // 构建用户消息
-    const userMessage = buildUserMessage(aiPrompt, pageContext);
+    // 构建用户消息（使用录制上下文）
+    const userMessage = buildUserMessage(aiPrompt, recordingContext);
     const newUserMsg: ChatMessage = { role: 'user', content: aiPrompt };
     
     // 添加到历史
@@ -482,35 +723,46 @@ function App() {
             </div>
           )}
 
+          {/* 录制面板 */}
+          <RecordingPanel
+            session={recordingSession}
+            onStart={handleStartRecording}
+            onStop={handleStopRecording}
+            onPause={handlePauseRecording}
+            onResume={handleResumeRecording}
+            onDeleteStep={handleDeleteStep}
+            onClear={handleClearRecording}
+            onUseRecording={handleUseRecording}
+          />
+
           {/* AI 助手 */}
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                  <Sparkles size={14} className="text-white" />
-                </div>
-                <span className="text-sm font-semibold text-slate-700">AI 助手</span>
-                {chatHistory.length > 0 && (
-                  <span className="text-xs text-purple-500 bg-purple-50 px-2 py-0.5 rounded">多轮对话中</span>
-                )}
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                <Sparkles size={14} className="text-white" />
               </div>
-
-              <button
-                onClick={capturePageContext}
-                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
-                  pageContext
-                    ? 'bg-green-50 text-green-700 border-green-200'
-                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                <Eye size={14} />
-                {pageContext ? '已读取' : '读取页面'}
-              </button>
+              <span className="text-sm font-semibold text-slate-700">AI 助手</span>
+              {chatHistory.length > 0 && (
+                <span className="text-xs text-purple-500 bg-purple-50 px-2 py-0.5 rounded">多轮对话中</span>
+              )}
             </div>
 
-            {pageContext && (
-              <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded-lg max-h-16 overflow-auto font-mono">
-                {pageContext.slice(0, 150)}...
+            {/* 录制上下文显示 */}
+            {recordingContext && (
+              <div className="text-xs bg-slate-50 p-2 rounded-lg max-h-20 overflow-auto">
+                <div className="flex items-center gap-1 text-purple-600 mb-1">
+                  <Circle size={8} className="fill-current" />
+                  <span className="font-medium">录制上下文</span>
+                  <button 
+                    onClick={() => setRecordingContext('')}
+                    className="ml-auto text-slate-400 hover:text-red-500"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+                <div className="text-slate-500 font-mono text-[10px]">
+                  {recordingContext.slice(0, 200)}...
+                </div>
               </div>
             )}
 
