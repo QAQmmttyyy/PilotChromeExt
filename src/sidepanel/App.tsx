@@ -78,7 +78,7 @@ function getStepDescription(step: RecordedStep): string {
     case 'input':
       return `输入 "${step.value?.slice(0, 15) || ''}${(step.value?.length || 0) > 15 ? '...' : ''}"`;
     case 'navigate':
-      return `打开 ${new URL(step.url).hostname}${new URL(step.url).pathname.slice(0, 20)}`;
+      return step.url;
     case 'submit':
       return `提交表单`;
     case 'select':
@@ -113,6 +113,13 @@ function RecordingPanel({
   const isRecording = session?.status === 'recording';
   const isPaused = session?.status === 'paused';
   const hasSteps = session && session.steps.length > 0;
+  const stepsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (hasSteps) {
+      stepsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [session?.steps.length]);
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -173,21 +180,22 @@ function RecordingPanel({
             {session.steps.map((step, idx) => (
               <div
                 key={step.id}
-                className="flex items-center gap-2 px-4 py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 group"
+                className="flex items-start gap-2 px-4 py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 group"
               >
-                <span className="text-xs text-slate-400 w-4">{idx + 1}</span>
-                <StepIcon type={step.type} />
-                <span className="flex-1 text-xs text-slate-600 truncate">
+                <span className="text-xs text-slate-400 w-4 shrink-0 pt-0.5">{idx + 1}</span>
+                <div className="shrink-0 pt-0.5"><StepIcon type={step.type} /></div>
+                <span className="flex-1 text-xs text-slate-600 break-all">
                   {getStepDescription(step)}
                 </span>
                 <button
                   onClick={() => onDeleteStep(step.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-opacity"
+                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-opacity shrink-0"
                 >
                   <X size={12} />
                 </button>
               </div>
             ))}
+            <div ref={stepsEndRef} />
           </div>
           
           <div className="px-4 py-2 border-t border-slate-100 flex justify-between items-center bg-slate-50">
@@ -355,23 +363,40 @@ function App() {
   useEffect(() => {
     loadScripts();
     checkApiKey();
-    loadRecordingSession();
     
     // 监听录制更新
     const handleMessage = (message: any) => {
       if (message.type === 'RECORDING_SESSION_UPDATE') {
-        setRecordingSession(message.payload);
+        // 只有当消息中的 scriptId 与当前编辑的脚本 ID 一致时才更新
+        if (currentScript && message.scriptId === currentScript.id) {
+          setRecordingSession(message.payload);
+        }
       }
     };
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
-  }, []);
+  }, [currentScript?.id]);
+
+  // 当切换脚本时加载对应的录制会话
+  useEffect(() => {
+    if (currentScript) {
+      loadRecordingSession(currentScript.id);
+    } else {
+      setRecordingSession(null);
+      setRecordingContext('');
+    }
+  }, [currentScript?.id]);
   
-  const loadRecordingSession = async () => {
+  const loadRecordingSession = async (scriptId: string) => {
     try {
-      const response = await chrome.runtime.sendMessage({ type: 'RECORDING_GET_SESSION' });
+      const response = await chrome.runtime.sendMessage({ 
+        type: 'RECORDING_GET_SESSION',
+        payload: { scriptId }
+      });
       if (response?.session) {
         setRecordingSession(response.session);
+      } else {
+        setRecordingSession(null);
       }
     } catch (e) {
       console.warn('Failed to load recording session:', e);
@@ -379,6 +404,7 @@ function App() {
   };
   
   const handleStartRecording = async () => {
+    if (!currentScript) return;
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab.id) return;
     
@@ -390,7 +416,7 @@ function App() {
     try {
       const response = await chrome.runtime.sendMessage({
         type: 'RECORDING_START',
-        payload: { tabId: tab.id }
+        payload: { tabId: tab.id, scriptId: currentScript.id }
       });
       if (response?.session) {
         setRecordingSession(response.session);
@@ -434,10 +460,11 @@ function App() {
   };
   
   const handleDeleteStep = async (stepId: string) => {
+    if (!currentScript) return;
     try {
       const response = await chrome.runtime.sendMessage({
         type: 'RECORDING_DELETE_STEP',
-        payload: { stepId }
+        payload: { scriptId: currentScript.id, stepId }
       });
       if (response?.session) {
         setRecordingSession(response.session);
@@ -448,8 +475,12 @@ function App() {
   };
   
   const handleClearRecording = async () => {
+    if (!currentScript) return;
     try {
-      await chrome.runtime.sendMessage({ type: 'RECORDING_CLEAR' });
+      await chrome.runtime.sendMessage({ 
+        type: 'RECORDING_CLEAR',
+        payload: { scriptId: currentScript.id }
+      });
       setRecordingSession(null);
       setRecordingContext('');
     } catch (e) {

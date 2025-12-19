@@ -44,6 +44,7 @@ export interface RecordedStep {
 
 export interface RecordingSession {
   id: string;
+  scriptId: string; // 关联的脚本 ID
   name: string;
   startUrl: string;
   startTime: number;

@@ -6,11 +6,30 @@ const globalStore: Record<string, any> = {};
 const workflows = new Map<number, WorkflowContext>();
 
 // ============== Recording Session Management ==============
-let currentSession: RecordingSession | null = null;
+let sessions: Record<string, RecordingSession> = {}; // scriptId -> RecordingSession
+let activeScriptId: string | null = null;
 
-function createRecordingSession(tabId: number, url: string): RecordingSession {
-  return {
+// 从存储中恢复所有会话
+let isRestoring = true;
+chrome.storage.local.get(['recordingSessions', 'activeScriptId']).then(res => {
+  if (res.recordingSessions && typeof res.recordingSessions === 'object') {
+    sessions = res.recordingSessions as Record<string, RecordingSession>;
+    console.log('[Pilot BG] Sessions restored from storage');
+  }
+  if (res.activeScriptId && typeof res.activeScriptId === 'string') {
+    activeScriptId = res.activeScriptId as string;
+  }
+  isRestoring = false;
+});
+
+function saveSessionsToStorage() {
+  chrome.storage.local.set({ recordingSessions: sessions, activeScriptId });
+}
+
+function createRecordingSession(tabId: number, url: string, scriptId: string): RecordingSession {
+  const session: RecordingSession = {
     id: crypto.randomUUID(),
+    scriptId,
     name: `Recording ${new Date().toLocaleString()}`,
     startUrl: url,
     startTime: Date.now(),
@@ -18,10 +37,11 @@ function createRecordingSession(tabId: number, url: string): RecordingSession {
     status: 'recording',
     tabId,
   };
+  return session;
 }
 
 function addStepToSession(payload: RecordingStepPayload) {
-  if (!currentSession || currentSession.status !== 'recording') return;
+  if (!activeScriptId || !sessions[activeScriptId] || sessions[activeScriptId].status !== 'recording') return;
   
   const step: RecordedStep = {
     id: crypto.randomUUID(),
@@ -29,19 +49,20 @@ function addStepToSession(payload: RecordingStepPayload) {
     ...payload,
   };
   
-  currentSession.steps.push(step);
-  console.log(`[Pilot Recording] Step added:`, step.type, step.element?.tag || step.url);
+  sessions[activeScriptId].steps.push(step);
+  console.log(`[Pilot Recording] Step added to script ${activeScriptId}:`, step.type);
   
-  // 通知 SidePanel 更新
-  notifySidePanelUpdate();
+  saveSessionsToStorage();
+  notifySidePanelUpdate(activeScriptId);
 }
 
 function addNavigationStep(tabId: number, url: string, title: string) {
-  if (!currentSession || currentSession.status !== 'recording') return;
-  if (currentSession.tabId !== tabId) return;
+  if (!activeScriptId || !sessions[activeScriptId] || sessions[activeScriptId].status !== 'recording') return;
+  if (sessions[activeScriptId].tabId !== tabId) return;
   
+  const session = sessions[activeScriptId];
   // 避免重复记录相同 URL
-  const lastStep = currentSession.steps[currentSession.steps.length - 1];
+  const lastStep = session.steps[session.steps.length - 1];
   if (lastStep?.type === 'navigate' && lastStep.url === url) return;
   
   const step: RecordedStep = {
@@ -52,23 +73,26 @@ function addNavigationStep(tabId: number, url: string, title: string) {
     pageTitle: title,
   };
   
-  currentSession.steps.push(step);
-  console.log(`[Pilot Recording] Navigation step added:`, url);
+  session.steps.push(step);
+  console.log(`[Pilot Recording] Navigation step added to script ${activeScriptId}:`, url);
   
-  notifySidePanelUpdate();
+  saveSessionsToStorage();
+  notifySidePanelUpdate(activeScriptId);
 }
 
-function notifySidePanelUpdate() {
+function notifySidePanelUpdate(scriptId: string) {
   chrome.runtime.sendMessage({
     type: 'RECORDING_SESSION_UPDATE',
-    payload: currentSession,
+    payload: sessions[scriptId],
+    scriptId
   }).catch(() => {});
 }
 
-async function startRecording(tabId: number) {
+async function startRecording(tabId: number, scriptId: string) {
   const tab = await chrome.tabs.get(tabId);
   
-  currentSession = createRecordingSession(tabId, tab.url || '');
+  activeScriptId = scriptId;
+  sessions[scriptId] = createRecordingSession(tabId, tab.url || '', scriptId);
   
   // 添加初始导航步骤
   addNavigationStep(tabId, tab.url || '', tab.title || '');
@@ -79,15 +103,17 @@ async function startRecording(tabId: number) {
     action: 'start',
   });
   
-  console.log(`[Pilot Recording] Started for tab ${tabId}`);
-  notifySidePanelUpdate();
+  console.log(`[Pilot Recording] Started for script ${scriptId} in tab ${tabId}`);
+  saveSessionsToStorage();
+  notifySidePanelUpdate(scriptId);
 }
 
 async function stopRecording() {
-  if (!currentSession) return;
+  if (!activeScriptId || !sessions[activeScriptId]) return;
   
-  const tabId = currentSession.tabId;
-  currentSession.status = 'stopped';
+  const session = sessions[activeScriptId];
+  const tabId = session.tabId;
+  session.status = 'stopped';
   
   // 通知 Content Script 停止录制
   try {
@@ -99,17 +125,21 @@ async function stopRecording() {
     console.warn('[Pilot Recording] Could not notify content script:', e);
   }
   
-  console.log(`[Pilot Recording] Stopped. Total steps: ${currentSession.steps.length}`);
-  notifySidePanelUpdate();
+  console.log(`[Pilot Recording] Stopped for script ${activeScriptId}. Total steps: ${session.steps.length}`);
+  saveSessionsToStorage();
+  notifySidePanelUpdate(activeScriptId);
+  activeScriptId = null; // 停止后不再是活跃录制状态
+  saveSessionsToStorage();
 }
 
 async function pauseRecording() {
-  if (!currentSession) return;
+  if (!activeScriptId || !sessions[activeScriptId]) return;
   
-  currentSession.status = 'paused';
+  const session = sessions[activeScriptId];
+  session.status = 'paused';
   
   try {
-    await chrome.tabs.sendMessage(currentSession.tabId, {
+    await chrome.tabs.sendMessage(session.tabId, {
       type: 'RECORDING_CONTROL',
       action: 'pause',
     });
@@ -117,17 +147,19 @@ async function pauseRecording() {
     console.warn('[Pilot Recording] Could not notify content script:', e);
   }
   
-  console.log(`[Pilot Recording] Paused`);
-  notifySidePanelUpdate();
+  console.log(`[Pilot Recording] Paused for script ${activeScriptId}`);
+  saveSessionsToStorage();
+  notifySidePanelUpdate(activeScriptId);
 }
 
 async function resumeRecording() {
-  if (!currentSession) return;
+  if (!activeScriptId || !sessions[activeScriptId]) return;
   
-  currentSession.status = 'recording';
+  const session = sessions[activeScriptId];
+  session.status = 'recording';
   
   try {
-    await chrome.tabs.sendMessage(currentSession.tabId, {
+    await chrome.tabs.sendMessage(session.tabId, {
       type: 'RECORDING_CONTROL',
       action: 'start',
     });
@@ -135,34 +167,45 @@ async function resumeRecording() {
     console.warn('[Pilot Recording] Could not notify content script:', e);
   }
   
-  console.log(`[Pilot Recording] Resumed`);
-  notifySidePanelUpdate();
+  console.log(`[Pilot Recording] Resumed for script ${activeScriptId}`);
+  saveSessionsToStorage();
+  notifySidePanelUpdate(activeScriptId);
 }
 
-function deleteStep(stepId: string) {
-  if (!currentSession) return;
+function deleteStep(scriptId: string, stepId: string) {
+  if (!sessions[scriptId]) return;
   
-  currentSession.steps = currentSession.steps.filter(s => s.id !== stepId);
-  console.log(`[Pilot Recording] Step deleted: ${stepId}`);
-  notifySidePanelUpdate();
+  sessions[scriptId].steps = sessions[scriptId].steps.filter(s => s.id !== stepId);
+  console.log(`[Pilot Recording] Step deleted from script ${scriptId}: ${stepId}`);
+  saveSessionsToStorage();
+  notifySidePanelUpdate(scriptId);
 }
 
-function clearRecording() {
-  if (currentSession) {
+function clearRecording(scriptId: string) {
+  if (activeScriptId === scriptId) {
     stopRecording();
   }
-  currentSession = null;
-  console.log(`[Pilot Recording] Cleared`);
-  notifySidePanelUpdate();
+  delete sessions[scriptId];
+  console.log(`[Pilot Recording] Cleared for script ${scriptId}`);
+  saveSessionsToStorage();
+  // 注意：不需要调用 notifySidePanelUpdate，因为会话已被删除
 }
 
 // ============== Navigation Tracking ==============
 chrome.webNavigation.onCompleted.addListener((details) => {
   if (details.frameId !== 0) return; // 只处理主 frame
   
-  if (currentSession && currentSession.status === 'recording' && currentSession.tabId === details.tabId) {
+  if (activeScriptId && sessions[activeScriptId]?.status === 'recording' && sessions[activeScriptId].tabId === details.tabId) {
     chrome.tabs.get(details.tabId).then(tab => {
       addNavigationStep(details.tabId, details.url, tab.title || '');
+      
+      // 确保内容脚本开始录制
+      chrome.tabs.sendMessage(details.tabId, {
+        type: 'RECORDING_CONTROL',
+        action: 'start',
+      }).catch(() => {
+        // 脚本可能还没准备好，没关系，脚本加载时会主动问 status
+      });
     });
   }
 });
@@ -170,10 +213,23 @@ chrome.webNavigation.onCompleted.addListener((details) => {
 chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
   if (details.frameId !== 0) return;
   
-  if (currentSession && currentSession.status === 'recording' && currentSession.tabId === details.tabId) {
+  if (activeScriptId && sessions[activeScriptId]?.status === 'recording' && sessions[activeScriptId].tabId === details.tabId) {
     chrome.tabs.get(details.tabId).then(tab => {
       addNavigationStep(details.tabId, details.url, tab.title || '');
     });
+  }
+});
+
+// 处理新打开的标签页（如果正在录制且是从录制页打开的）
+chrome.tabs.onCreated.addListener((tab) => {
+  if (activeScriptId && sessions[activeScriptId]?.status === 'recording') {
+    const session = sessions[activeScriptId];
+    // 如果新标签页有 openerTabId 且等于当前录制的标签页
+    if (tab.openerTabId === session.tabId) {
+      console.log(`[Pilot Recording] Following recording to new tab: ${tab.id}`);
+      session.tabId = tab.id!;
+      notifySidePanelUpdate(activeScriptId);
+    }
   }
 });
 
@@ -189,26 +245,78 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.type === 'RECORDING_STEP') {
     addStepToSession(request.payload);
   } else if (request.type === 'RECORDING_START') {
-    const { tabId } = request.payload;
-    startRecording(tabId).then(() => sendResponse({ success: true, session: currentSession }));
+    const { tabId, scriptId } = request.payload;
+    startRecording(tabId, scriptId).then(() => sendResponse({ success: true, session: sessions[scriptId] }));
     return true;
   } else if (request.type === 'RECORDING_STOP') {
-    stopRecording();
-    sendResponse({ success: true, session: currentSession });
+    const sId = activeScriptId;
+    stopRecording().then(() => {
+      sendResponse({ success: true, session: sId ? sessions[sId] : null });
+    });
+    return true;
   } else if (request.type === 'RECORDING_PAUSE') {
-    pauseRecording();
-    sendResponse({ success: true, session: currentSession });
+    const sId = activeScriptId;
+    pauseRecording().then(() => sendResponse({ success: true, session: sId ? sessions[sId] : null }));
+    return true;
   } else if (request.type === 'RECORDING_RESUME') {
-    resumeRecording().then(() => sendResponse({ success: true, session: currentSession }));
+    const sId = activeScriptId;
+    resumeRecording().then(() => sendResponse({ success: true, session: sId ? sessions[sId] : null }));
     return true;
   } else if (request.type === 'RECORDING_GET_SESSION') {
-    sendResponse({ session: currentSession });
+    const { scriptId } = request.payload || {};
+    if (!scriptId) {
+      sendResponse({ session: null });
+      return;
+    }
+    
+    const sendRes = () => {
+      sendResponse({ session: sessions[scriptId] || null });
+    };
+
+    if (isRestoring) {
+      chrome.storage.local.get(['recordingSessions']).then(res => {
+        if (res.recordingSessions && typeof res.recordingSessions === 'object') {
+          sessions = res.recordingSessions as Record<string, RecordingSession>;
+        }
+        isRestoring = false;
+        sendRes();
+      });
+      return true;
+    } else {
+      sendRes();
+    }
   } else if (request.type === 'RECORDING_DELETE_STEP') {
-    deleteStep(request.payload.stepId);
-    sendResponse({ success: true, session: currentSession });
+    const { scriptId, stepId } = request.payload;
+    deleteStep(scriptId, stepId);
+    sendResponse({ success: true, session: sessions[scriptId] });
   } else if (request.type === 'RECORDING_CLEAR') {
-    clearRecording();
+    const { scriptId } = request.payload;
+    clearRecording(scriptId);
     sendResponse({ success: true });
+  } else if (request.type === 'RECORDING_GET_STATUS') {
+    const checkStatus = () => {
+      sendResponse({ 
+        isRecording: activeScriptId !== null && sessions[activeScriptId]?.status === 'recording',
+        activeScriptId,
+        session: activeScriptId ? sessions[activeScriptId] : null 
+      });
+    };
+
+    if (isRestoring) {
+      chrome.storage.local.get(['recordingSessions', 'activeScriptId']).then(res => {
+        if (res.recordingSessions && typeof res.recordingSessions === 'object') {
+          sessions = res.recordingSessions as Record<string, RecordingSession>;
+        }
+        if (res.activeScriptId && typeof res.activeScriptId === 'string') {
+          activeScriptId = res.activeScriptId as string;
+        }
+        isRestoring = false;
+        checkStatus();
+      });
+      return true;
+    } else {
+      checkStatus();
+    }
   }
 });
 

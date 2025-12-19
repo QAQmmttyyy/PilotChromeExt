@@ -1,5 +1,5 @@
 /**
- * Recorder - 录制核心逻辑，多选择器生成
+ * Recorder - 录制核心逻辑，渐进式唯一选择器生成
  */
 
 import { RecordedElement, RecordedStepType, RecordingStepPayload } from './types';
@@ -8,134 +8,174 @@ function escapeSelector(str: string): string {
   return CSS.escape(str);
 }
 
-function generatePathSelector(el: Element, maxDepth = 5): string {
-  const path: string[] = [];
+/**
+ * 核心断言：校验选择器是否在当前页面唯一，且指向的确实是目标元素
+ */
+function verifySelector(selector: string, target: Element): boolean {
+  try {
+    const elements = document.querySelectorAll(selector);
+    return elements.length === 1 && elements[0] === target;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * 获取单个元素的特征片段
+ * isTarget: 是否是操作的目标元素。
+ */
+function getElementSegment(el: Element, isTarget: boolean): string {
+  const tag = el.tagName.toLowerCase();
+  if (el.id) return `#${escapeSelector(el.id)}`;
+
+  let segment = tag;
+
+  if (isTarget) {
+    // 优先提取高度稳定的语义属性
+    if (tag === 'a') {
+      const href = el.getAttribute('href');
+      if (href && !href.startsWith('javascript:') && href !== '#') {
+        segment += `[href="${escapeSelector(href)}"]`;
+      }
+    }
+
+    const stableAttrs = ['name', 'type', 'placeholder', 'title'];
+    for (const attr of stableAttrs) {
+      const val = el.getAttribute(attr);
+      if (val && val.length < 100) {
+        segment += `[${attr}="${escapeSelector(val)}"]`;
+      }
+    }
+  }
+
+  // 类名过滤：避开动态生成的类名
+  if (el.classList.length > 0) {
+    const safeClasses = Array.from(el.classList)
+      .filter(c => !/\d/.test(c) && c.length < 40)
+      .map(escapeSelector);
+
+    if (safeClasses.length > 0) {
+      segment += '.' + safeClasses.join('.');
+    }
+  }
+
+  return segment;
+}
+
+/**
+ * 渐进式路径构建逻辑
+ * 策略：向上攀爬直至锁定唯一性，不限制层级，使用后代选择器。
+ */
+function buildProgressivePath(el: Element): string | null {
   let current: Element | null = el;
+  const parts: string[] = [];
   let depth = 0;
 
-  while (current && current !== document.body && depth < maxDepth) {
-    const tag = current.tagName.toLowerCase();
-    const parent: Element | null = current.parentElement;
-    const currentEl = current;
-    
-    if (parent) {
-      const siblings = Array.from(parent.children).filter((c: Element) => c.tagName === currentEl.tagName);
-      if (siblings.length > 1) {
-        const idx = siblings.indexOf(currentEl) + 1;
-        path.unshift(`${tag}:nth-of-type(${idx})`);
-      } else {
-        path.unshift(tag);
+  while (current && current !== document.documentElement) {
+    const isTarget = depth === 0;
+    const segment = getElementSegment(current, isTarget);
+
+    // 如果这一层没有任何特征（只是个空的 div 或 span），且不是目标元素
+    // 我们在某些情况下可以跳过它以缩短选择器，但为了稳妥，目前保留
+    parts.unshift(segment);
+
+    // 每次向上爬一层，都尝试一次组合
+    const selector = parts.join(' ');
+    if (verifySelector(selector, el)) return selector;
+
+    // 如果是目标元素且属性组合不唯一，尝试添加索引作为局部唯一标识
+    if (isTarget) {
+      const parent = current.parentElement;
+      if (parent) {
+        const siblings = Array.from(parent.children).filter(s => s.tagName === current!.tagName);
+        if (siblings.length > 1) {
+          const index = siblings.indexOf(current) + 1;
+          const nthSelector = `${segment}:nth-of-type(${index})`;
+          if (verifySelector(nthSelector, el)) return nthSelector;
+        }
       }
-    } else {
-      path.unshift(tag);
     }
-    
-    current = parent;
+
+    // 遇到 ID 后，如果组合还不唯一，说明页面有重复 ID，继续向上爬
+    // 否则 ID 通常是最佳的终点
+    if (current.id && verifySelector(parts.join(' '), el)) break;
+
+    current = current.parentElement;
     depth++;
   }
 
+  // 如果爬到顶了还不唯一（极罕见），则返回 null 交给兜底
+  const finalSelector = parts.join(' ');
+  return verifySelector(finalSelector, el) ? finalSelector : null;
+}
+
+/**
+ * 兜底全路径选择器
+ */
+function generatePathSelector(el: Element): string {
+  const path: string[] = [];
+  let current: Element | null = el;
+
+  while (current && current !== document.body) {
+    const tag = current.tagName.toLowerCase();
+    const parent: Element | null = current.parentElement;
+    if (parent) {
+      const siblings = Array.from(parent.children).filter((c: Element) => c.tagName === current!.tagName);
+      const idx = siblings.indexOf(current) + 1;
+      path.unshift(siblings.length > 1 ? `${tag}:nth-of-type(${idx})` : tag);
+    } else {
+      path.unshift(tag);
+    }
+    current = parent;
+  }
   return path.join(' > ');
 }
 
-export function generateMultiSelectors(el: Element): string[] {
-  const selectors: string[] = [];
-  const tag = el.tagName.toLowerCase();
-  
-  // 1. ID (最稳定)
-  if (el.id) {
-    selectors.push(`#${escapeSelector(el.id)}`);
-  }
-  
-  // 2. data-testid / data-test-id / data-cy
-  const testId = el.getAttribute('data-testid') || el.getAttribute('data-test-id');
-  if (testId) {
-    selectors.push(`[data-testid="${escapeSelector(testId)}"]`);
-  }
-  const dataCy = el.getAttribute('data-cy');
-  if (dataCy) {
-    selectors.push(`[data-cy="${escapeSelector(dataCy)}"]`);
-  }
-  
-  // 3. name 属性（表单元素）
-  const name = el.getAttribute('name');
-  if (name) {
-    selectors.push(`${tag}[name="${escapeSelector(name)}"]`);
-  }
-  
-  // 4. aria-label
-  const ariaLabel = el.getAttribute('aria-label');
-  if (ariaLabel && ariaLabel.length < 50) {
-    selectors.push(`${tag}[aria-label="${escapeSelector(ariaLabel)}"]`);
-  }
-  
-  // 5. role + 上下文
-  const role = el.getAttribute('role');
-  if (role) {
-    selectors.push(`[role="${role}"]`);
-  }
-  
-  // 6. type 属性（input）
-  const type = (el as HTMLInputElement).type;
-  if (tag === 'input' && type) {
-    const nameAttr = el.getAttribute('name');
-    if (nameAttr) {
-      selectors.push(`input[type="${type}"][name="${escapeSelector(nameAttr)}"]`);
-    } else {
-      selectors.push(`input[type="${type}"]`);
-    }
-  }
-  
-  // 7. placeholder
-  const placeholder = (el as HTMLInputElement).placeholder;
-  if (placeholder && placeholder.length < 50) {
-    selectors.push(`${tag}[placeholder="${escapeSelector(placeholder)}"]`);
-  }
-  
-  // 8. 结构路径 (兜底)
-  selectors.push(generatePathSelector(el));
-  
-  // 去重
-  return [...new Set(selectors)];
+/**
+ * 生成最佳唯一选择器
+ */
+export function generateBestSelector(el: Element): string {
+  // 1. 快轨：自身语义属性是否已足够唯一
+  const fastSegment = getElementSegment(el, true);
+  if (verifySelector(fastSegment, el)) return fastSegment;
+
+  // 2. 渐进式攀爬
+  const progressiveSelector = buildProgressivePath(el);
+  if (progressiveSelector) return progressiveSelector;
+
+  // 3. 最终兜底
+  return generatePathSelector(el);
 }
 
 export function extractElementInfo(el: Element): RecordedElement {
   const tag = el.tagName.toLowerCase();
   const rect = el.getBoundingClientRect();
-  
-  // 提取文本
+
   let text = '';
   const ariaLabel = el.getAttribute('aria-label');
   if (ariaLabel) {
     text = ariaLabel;
   } else {
-    text = (el as HTMLElement).innerText?.trim().slice(0, 50) || '';
+    text = (el as HTMLElement).innerText?.trim() || '';
   }
-  
-  // 提取关键属性
+
   const attrs: Record<string, string> = {};
   if (el.id) attrs.id = el.id;
-  
   const role = el.getAttribute('role');
   if (role) attrs.role = role;
-  
   const type = (el as HTMLInputElement).type;
   if (type && type !== 'text') attrs.type = type;
-  
   const name = el.getAttribute('name');
   if (name) attrs.name = name;
-  
   const placeholder = (el as HTMLInputElement).placeholder;
   if (placeholder) attrs.placeholder = placeholder;
-  
   const href = (el as HTMLAnchorElement).href;
-  if (href && tag === 'a') {
-    attrs.href = href.length > 60 ? href.slice(0, 57) + '...' : href;
-  }
-  
+  if (href && tag === 'a') attrs.href = href;
+
   return {
     tag,
     text,
-    selectors: generateMultiSelectors(el),
+    selectors: [generateBestSelector(el)],
     attributes: attrs,
     boundingRect: {
       x: rect.x,
@@ -165,40 +205,30 @@ export function createStepPayload(
 export function isInteractiveElement(el: Element): boolean {
   const tag = el.tagName.toLowerCase();
   const interactiveTags = ['a', 'button', 'input', 'textarea', 'select', 'summary', 'details'];
-  
   if (interactiveTags.includes(tag)) return true;
-  
   const role = el.getAttribute('role');
   const interactiveRoles = ['button', 'link', 'textbox', 'checkbox', 'radio', 'switch', 'menuitem', 'tab', 'option', 'combobox'];
   if (role && interactiveRoles.includes(role)) return true;
-  
   if (el.hasAttribute('onclick') || el.hasAttribute('tabindex')) return true;
   if (el.getAttribute('contenteditable') === 'true') return true;
-  
   return false;
 }
 
 export function shouldRecordClick(el: Element): boolean {
   const tag = el.tagName.toLowerCase();
-  
-  // 不记录密码输入框的点击（但会记录输入）
   if (tag === 'input' && (el as HTMLInputElement).type === 'password') {
-    return true; // 点击可以记录，只是不记录值
+    return true;
   }
-  
   return isInteractiveElement(el);
 }
 
 export function findClickableAncestor(el: Element): Element | null {
   let current: Element | null = el;
-  
   while (current && current !== document.body) {
     if (isInteractiveElement(current)) {
       return current;
     }
     current = current.parentElement;
   }
-  
   return null;
 }
-

@@ -5,25 +5,25 @@
     "src": "../../../../@crx/manifest",
     "isEntry": true
   },
-  "_index-CbXWkUxp.css": {
-    "file": "assets/index-CbXWkUxp.css",
-    "src": "_index-CbXWkUxp.css"
-  },
-  "_index-DN9SqLca.js": {
-    "file": "assets/index-DN9SqLca.js",
+  "_index-3tdutb9N.js": {
+    "file": "assets/index-3tdutb9N.js",
     "name": "index",
     "css": [
-      "assets/index-CbXWkUxp.css"
+      "assets/index-CfbyOSX6.css"
     ]
   },
+  "_index-CfbyOSX6.css": {
+    "file": "assets/index-CfbyOSX6.css",
+    "src": "_index-CfbyOSX6.css"
+  },
   "src/background/index.ts": {
-    "file": "assets/index.ts-BO720eCk.js",
+    "file": "assets/index.ts-B2Y2SMFe.js",
     "name": "index.ts",
     "src": "src/background/index.ts",
     "isEntry": true
   },
   "src/content/index.ts": {
-    "file": "assets/index.ts-BQVWp27z.js",
+    "file": "assets/index.ts-CIGak4Mp.js",
     "name": "index.ts",
     "src": "src/content/index.ts",
     "isEntry": true
@@ -35,21 +35,21 @@
     "isEntry": true
   },
   "src/popup/index.html": {
-    "file": "assets/index.html-CCDVNvn3.js",
+    "file": "assets/index.html-Bb8g2Uv0.js",
     "name": "index.html",
     "src": "src/popup/index.html",
     "isEntry": true,
     "imports": [
-      "_index-DN9SqLca.js"
+      "_index-3tdutb9N.js"
     ]
   },
   "src/sidepanel/index.html": {
-    "file": "assets/index.html-Cm6DyUH9.js",
+    "file": "assets/index.html-D3dDWNPk.js",
     "name": "index.html",
     "src": "src/sidepanel/index.html",
     "isEntry": true,
     "imports": [
-      "_index-DN9SqLca.js"
+      "_index-3tdutb9N.js"
     ]
   }
 }

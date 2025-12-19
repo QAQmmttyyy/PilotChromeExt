@@ -1,6 +1,6 @@
 // Isolated World Content Script
 // Pilot: Pure Bridge + Recording Event Capture
-import { createStepPayload, findClickableAncestor, shouldRecordClick } from '../lib/recorder';
+import { createStepPayload } from '../lib/recorder';
 import { RecordingStepPayload } from '../lib/types';
 
 console.log('Pilot Bridge (Isolated World) loaded');
@@ -14,10 +14,12 @@ let inputDebounceTimer: number | null = null;
 function sendRecordingStep(payload: RecordingStepPayload) {
   if (!isRecording) return;
   
+  // 使用 chrome.runtime.sendMessage 发送
+  // 不需要 await，因为我们希望尽可能快地发出，即使页面即将卸载
   chrome.runtime.sendMessage({
     type: 'RECORDING_STEP',
     payload
-  }).catch(err => console.error('[Pilot Recording] Error:', err));
+  }).catch(err => console.debug('[Pilot Recording] Send error (expected on nav):', err));
 }
 
 function handleClick(e: MouseEvent) {
@@ -26,20 +28,24 @@ function handleClick(e: MouseEvent) {
   const target = e.target as Element;
   if (!target) return;
   
-  // 找到可点击的祖先元素
-  const clickable = findClickableAncestor(target) || target;
+  // 找到可点击的祖先元素，如果没有就使用 target 本身
+  const clickable = target as HTMLElement;
   
-  // 过滤掉不需要记录的点击
-  if (!shouldRecordClick(clickable)) return;
-  
-  // input/textarea 的点击不单独记录（会记录输入）
   const tag = clickable.tagName.toLowerCase();
-  if (tag === 'input' || tag === 'textarea') return;
+
+  // input/textarea 的点击不单独记录（会记录输入）
+  // if (tag === 'input' || tag === 'textarea') return;
+  
+  // 过滤掉 body/html 等顶层元素的点击
+  if (tag === 'body' || tag === 'html') return;
   
   const payload = createStepPayload('click', clickable);
+  
+  // 如果是链接或提交按钮，可能会导致页面跳转
+  // 我们尽可能快地发出消息
   sendRecordingStep(payload);
   
-  console.log('[Pilot Recording] Click:', payload);
+  console.log('[Pilot Recording] Click captured:', payload);
 }
 
 function handleInput(e: Event) {
@@ -137,7 +143,7 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.type === 'RECORDING_CONTROL') {
     const { action } = request;
     
-    if (action === 'start') {
+    if (action === 'start' || action === 'resume') {
       isRecording = true;
       startEventCapture();
       sendResponse({ success: true });
@@ -151,6 +157,17 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     
     return true;
   }
+});
+
+// 初始化：询问 Background 是否正在录制
+chrome.runtime.sendMessage({ type: 'RECORDING_GET_STATUS' }).then(response => {
+  if (response?.isRecording) {
+    isRecording = true;
+    startEventCapture();
+    console.log('[Pilot Recording] Resumed recording state from background');
+  }
+}).catch(() => {
+  // 忽略扩展环境未准备好的错误
 });
 
 // ============== Original Bridge Logic ==============
