@@ -355,6 +355,8 @@ function App() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [currentModel, setCurrentModel] = useState(AVAILABLE_MODELS[0]);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [codeUpdateStatus, setCodeUpdateStatus] = useState<'idle' | 'updated'>('idle');
+  const [streamingContent, setStreamingContent] = useState('');
   
   // Recording
   const [recordingSession, setRecordingSession] = useState<RecordingSession | null>(null);
@@ -613,6 +615,8 @@ function App() {
     setShowChat(true);
     
     setIsGenerating(true);
+    setStreamingContent('');
+    setCodeUpdateStatus('idle');
     let generatedCode = '';
 
     try {
@@ -624,14 +628,21 @@ function App() {
         return msg;
       });
 
+      // 流式接收时只更新 streamingContent，不修改代码编辑器
       for await (const chunk of generateScriptStream(messagesForApi, config)) {
         generatedCode += chunk;
-        if (currentScript) {
-          setCurrentScript({
-            ...currentScript,
-            code: cleanGeneratedCode(generatedCode)
-          });
-        }
+        setStreamingContent(generatedCode);
+      }
+
+      // AI 响应完成后，提取完整代码并更新到编辑器
+      const cleanedCode = cleanGeneratedCode(generatedCode);
+      if (currentScript && cleanedCode) {
+        setCurrentScript({
+          ...currentScript,
+          code: cleanedCode
+        });
+        setCodeUpdateStatus('updated');
+        setTimeout(() => setCodeUpdateStatus('idle'), 2000);
       }
 
       // 添加助手回复到历史
@@ -639,11 +650,13 @@ function App() {
       setChatHistory([...updatedHistory, assistantMsg]);
       
       setAiPrompt('');
+      setStreamingContent('');
     } catch (err: any) {
       console.error('AI generation failed:', err);
       // 添加错误消息
       const errorMsg: ChatMessage = { role: 'assistant', content: `❌ 错误: ${err.message}` };
       setChatHistory([...updatedHistory, errorMsg]);
+      setStreamingContent('');
     } finally {
       setIsGenerating(false);
     }
@@ -708,7 +721,14 @@ function App() {
           {/* 代码编辑器 */}
           <div className="flex-1 border border-slate-200 rounded-xl overflow-hidden flex flex-col bg-white shadow-sm min-h-0">
             <div className="bg-slate-50 px-4 py-2 text-xs text-slate-500 border-b border-slate-200 flex justify-between items-center">
-              <span className="font-medium">代码编辑器</span>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">代码编辑器</span>
+                {codeUpdateStatus === 'updated' && (
+                  <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded animate-pulse">
+                    ✓ 代码已更新
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => setShowChat(!showChat)}
                 className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${showChat ? 'bg-purple-100 text-purple-700' : 'hover:bg-slate-100'}`}
@@ -726,10 +746,15 @@ function App() {
           </div>
 
           {/* 对话历史 */}
-          {showChat && chatHistory.length > 0 && (
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm max-h-40 overflow-hidden flex flex-col">
+          {showChat && (chatHistory.length > 0 || streamingContent) && (
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm max-h-48 overflow-hidden flex flex-col">
               <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                <span className="text-xs font-medium text-slate-600">对话历史</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-slate-600">对话历史</span>
+                  {isGenerating && (
+                    <span className="text-xs text-purple-600 animate-pulse">生成中...</span>
+                  )}
+                </div>
                 <button onClick={clearChatHistory} className="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1">
                   <RotateCcw size={12} />
                   清空
@@ -749,6 +774,18 @@ function App() {
                     <div className="line-clamp-2">{msg.content.slice(0, 100)}{msg.content.length > 100 ? '...' : ''}</div>
                   </div>
                 ))}
+                {/* 流式输出显示 */}
+                {streamingContent && (
+                  <div className="text-xs p-2 rounded-lg bg-purple-50 text-purple-800 mr-4 border border-purple-200">
+                    <div className="font-medium mb-0.5 flex items-center gap-1">
+                      <Sparkles size={10} className="animate-spin" />
+                      AI 正在生成...
+                    </div>
+                    <pre className="whitespace-pre-wrap font-mono text-[10px] max-h-24 overflow-auto">
+                      {streamingContent.slice(-500)}
+                    </pre>
+                  </div>
+                )}
                 <div ref={chatEndRef} />
               </div>
             </div>
