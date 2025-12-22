@@ -293,6 +293,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const { scriptId } = request.payload;
     clearRecording(scriptId);
     sendResponse({ success: true });
+  } else if (request.type === 'STEP_NAVIGATING') {
+    // 脚本触发了导航，标记状态
+    const tabId = sender.tab?.id;
+    if (tabId) {
+      const workflow = workflows.get(tabId);
+      if (workflow && workflow.status === 'running') {
+        workflow.stepNavigating = true;
+        console.log(`[Pilot Engine] Step triggered navigation in Tab ${tabId}`);
+      }
+    }
   } else if (request.type === 'RECORDING_GET_STATUS') {
     const checkStatus = () => {
       sendResponse({ 
@@ -324,8 +334,15 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   const workflow = workflows.get(tabId);
   if (workflow && workflow.status === 'running') {
     if (changeInfo.status === 'complete') {
-      console.log(`[Pilot Engine] Tab ${tabId} loaded. Executing step...`);
-      executeCurrentStep(tabId);
+      if (workflow.stepNavigating) {
+        // 脚本触发的导航，自动推进到下一步
+        console.log(`[Pilot Engine] Tab ${tabId} loaded after script navigation. Advancing...`);
+        workflow.stepNavigating = false;
+        advanceWorkflow(tabId);
+      } else {
+        console.log(`[Pilot Engine] Tab ${tabId} loaded. Executing step...`);
+        executeCurrentStep(tabId);
+      }
     }
   }
 });
@@ -465,34 +482,48 @@ async function executeCurrentStep(tabId: number) {
      
      console.log(`[Pilot Engine] ✅ 选择器检查通过，准备执行脚本...`);
 
-     // 使用 Main World 执行（直接 eval，绕过 CSP 对 <script> 标签的限制）
-     // chrome.scripting.executeScript 在 world: 'MAIN' 里可以使用 eval，不受 CSP 约束
-     await chrome.scripting.executeScript({
-       target: { tabId },
-       func: (injectedData: Record<string, any>, injectedCode: string) => {
-          console.log('[Pilot] Executing script in Main World (via eval)...');
-          
-          // 1. 先注入数据到全局
-          (window as any).PilotData = injectedData;
-          
-          // 2. 使用 eval 直接执行（绕过 CSP）
-          try {
-            console.log('[Pilot Script] Starting execution...');
-            eval(injectedCode);
-          } catch (e) {
-            console.error('[Pilot Script] Execution Error:', e);
-            // 通知 Background 失败
-            const errorMsg = e instanceof Error ? e.message : String(e);
-            if ((window as any).Pilot?.workflow?.fail) {
-              (window as any).Pilot.workflow.fail(errorMsg);
-            }
-          }
-          
-          console.log('[Pilot] Script execution completed');
-       },
-       args: [data, code],
-       world: 'MAIN'
-     });
+    // 使用 Main World 执行（直接 eval，绕过 CSP 对 <script> 标签的限制）
+    // chrome.scripting.executeScript 在 world: 'MAIN' 里可以使用 eval，不受 CSP 约束
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (injectedData: Record<string, any>, injectedCode: string) => {
+         console.log('[Pilot] Executing script in Main World (via eval)...');
+         
+         // 1. 先注入数据到全局
+         (window as any).PilotData = injectedData;
+         
+         // 2. 监听页面卸载，通知 background 脚本触发了导航
+         const notifyNavigation = () => {
+           // 使用 sendBeacon 确保消息能在页面卸载前发出
+           // 但 Chrome extension 不支持 sendBeacon 到 runtime，用 postMessage 替代
+           window.postMessage({ 
+             source: 'PILOT_SCRIPT', 
+             action: 'stepNavigating',
+             payload: {} 
+           }, '*');
+         };
+         window.addEventListener('beforeunload', notifyNavigation, { once: true });
+         window.addEventListener('pagehide', notifyNavigation, { once: true });
+         
+         // 3. 使用 eval 直接执行（绕过 CSP）
+         try {
+           console.log('[Pilot Script] Starting execution...');
+           eval(injectedCode);
+         } catch (e) {
+           console.error('[Pilot Script] Execution Error:', e);
+           const errorMsg = e instanceof Error ? e.message : String(e);
+           if ((window as any).Pilot?.workflow?.fail) {
+             (window as any).Pilot.workflow.fail(errorMsg);
+           }
+         }
+         
+         // 4. 清理 PilotData（如果脚本同步完成）
+         // 注意：如果脚本触发了导航，这行不会执行
+         console.log('[Pilot] Script execution completed');
+      },
+      args: [data, code],
+      world: 'MAIN'
+    });
      
      console.log(`[Pilot Engine] Script execution completed for Tab ${tabId}`);
 

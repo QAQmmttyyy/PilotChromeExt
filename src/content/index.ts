@@ -178,6 +178,14 @@ window.addEventListener('message', (event) => {
     return;
   }
   const { action, payload } = event.data;
+  
+  // 特殊处理：脚本触发导航
+  if (action === 'stepNavigating') {
+    chrome.runtime.sendMessage({ type: 'STEP_NAVIGATING' })
+      .catch(() => {}); // 页面卸载时可能失败，忽略
+    return;
+  }
+  
   chrome.runtime.sendMessage({
     type: 'PILOT_BRIDGE_ACTION',
     action,

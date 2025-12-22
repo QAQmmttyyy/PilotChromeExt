@@ -12,6 +12,7 @@ export interface WorkflowContext {
   steps: WorkflowStep[];
   tabId: number | null;
   status: 'idle' | 'running' | 'paused' | 'completed' | 'failed';
+  stepNavigating?: boolean; // 脚本触发了导航，等待新页面加载后自动推进
 }
 
 // ============== Recording Types ==============

@@ -15,6 +15,8 @@ window.Pilot = {
   workflow: {
     next: (data?: any) => {
       console.log('[Pilot] Step completed, signaling...');
+      // 清理 PilotData
+      delete (window as any).PilotData;
       window.postMessage({ 
         source: 'PILOT_SCRIPT', 
         action: 'workflowNext', 
@@ -23,10 +25,12 @@ window.Pilot = {
     },
     finish: () => {
       console.log('[Pilot] Workflow finished');
+      delete (window as any).PilotData;
       window.postMessage({ source: 'PILOT_SCRIPT', action: 'workflowFinish', payload: {} }, '*');
     },
     fail: (reason: string) => {
       console.error('[Pilot] Workflow FAILED:', reason);
+      delete (window as any).PilotData;
       window.postMessage({ source: 'PILOT_SCRIPT', action: 'workflowFail', payload: { reason } }, '*');
     }
   }

@@ -17,19 +17,19 @@
     "src": "_index-ClXGLHSG.css"
   },
   "src/background/index.ts": {
-    "file": "assets/index.ts-B2Y2SMFe.js",
+    "file": "assets/index.ts-eaw3aDGH.js",
     "name": "index.ts",
     "src": "src/background/index.ts",
     "isEntry": true
   },
   "src/content/index.ts": {
-    "file": "assets/index.ts-CIGak4Mp.js",
+    "file": "assets/index.ts-BCeFuHIY.js",
     "name": "index.ts",
     "src": "src/content/index.ts",
     "isEntry": true
   },
   "src/content/main-world.ts": {
-    "file": "assets/main-world.ts-BXhvLeFW.js",
+    "file": "assets/main-world.ts-BKE2XNth.js",
     "name": "main-world.ts",
     "src": "src/content/main-world.ts",
     "isEntry": true
