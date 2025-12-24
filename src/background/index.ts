@@ -181,6 +181,47 @@ function deleteStep(scriptId: string, stepId: string) {
   notifySidePanelUpdate(scriptId);
 }
 
+function updateStep(scriptId: string, stepId: string, updates: Partial<RecordedStep>) {
+  if (!sessions[scriptId]) return;
+  
+  const stepIdx = sessions[scriptId].steps.findIndex(s => s.id === stepId);
+  if (stepIdx === -1) return;
+  
+  sessions[scriptId].steps[stepIdx] = {
+    ...sessions[scriptId].steps[stepIdx],
+    ...updates,
+    timestamp: Date.now(), // 更新时间戳
+  };
+  
+  console.log(`[Pilot Recording] Step updated in script ${scriptId}: ${stepId}`);
+  saveSessionsToStorage();
+  notifySidePanelUpdate(scriptId);
+}
+
+function addAiStep(scriptId: string, instruction: string) {
+  if (!sessions[scriptId] || sessions[scriptId].status !== 'recording') return;
+  
+  const step: RecordedStep = {
+    id: crypto.randomUUID(),
+    timestamp: Date.now(),
+    type: 'ai_step',
+    url: '', // 会在生成脚本时处理，或者根据当前活跃 Tab 填充
+    pageTitle: 'AI Step',
+    value: instruction
+  };
+  
+  // 尽量填充当前 URL
+  chrome.tabs.query({ active: true, currentWindow: true }).then(tabs => {
+    if (tabs[0]) {
+      step.url = tabs[0].url || '';
+      step.pageTitle = tabs[0].title || 'AI Step';
+    }
+    sessions[scriptId].steps.push(step);
+    saveSessionsToStorage();
+    notifySidePanelUpdate(scriptId);
+  });
+}
+
 function clearRecording(scriptId: string) {
   if (activeScriptId === scriptId) {
     stopRecording();
@@ -288,6 +329,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.type === 'RECORDING_DELETE_STEP') {
     const { scriptId, stepId } = request.payload;
     deleteStep(scriptId, stepId);
+    sendResponse({ success: true, session: sessions[scriptId] });
+  } else if (request.type === 'RECORDING_UPDATE_STEP') {
+    const { scriptId, stepId, updates } = request.payload;
+    updateStep(scriptId, stepId, updates);
+    sendResponse({ success: true, session: sessions[scriptId] });
+  } else if (request.type === 'RECORDING_ADD_AI_STEP') {
+    const { scriptId, instruction } = request.payload;
+    addAiStep(scriptId, instruction);
+    // 因为 addAiStep 是异步的（需要查询 tabs），所以我们在这里直接返回，让 notifySidePanelUpdate 处理更新
     sendResponse({ success: true, session: sessions[scriptId] });
   } else if (request.type === 'RECORDING_CLEAR') {
     const { scriptId } = request.payload;

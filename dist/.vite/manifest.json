@@ -1,55 +1,67 @@
 {
   "../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-W2JiOgT_.js",
+    "file": "assets/crx-manifest.js-DOOvejf4.js",
     "name": "crx-manifest.js",
     "src": "../../../../@crx/manifest",
     "isEntry": true
   },
-  "_index-BjB98e0e.js": {
-    "file": "assets/index-BjB98e0e.js",
+  "_index-DIzX96mZ.css": {
+    "file": "assets/index-DIzX96mZ.css",
+    "src": "_index-DIzX96mZ.css"
+  },
+  "_index-DU2K6woN.js": {
+    "file": "assets/index-DU2K6woN.js",
     "name": "index",
     "css": [
-      "assets/index-ClXGLHSG.css"
+      "assets/index-DIzX96mZ.css"
     ]
   },
-  "_index-ClXGLHSG.css": {
-    "file": "assets/index-ClXGLHSG.css",
-    "src": "_index-ClXGLHSG.css"
+  "_index.ts-loader-C_LX4moM.js": {
+    "file": "assets/index.ts-loader-C_LX4moM.js",
+    "src": "_index.ts-loader-C_LX4moM.js"
+  },
+  "_settings-C_x4bTXh.js": {
+    "file": "assets/settings-C_x4bTXh.js",
+    "name": "settings"
   },
   "src/background/index.ts": {
-    "file": "assets/index.ts-eaw3aDGH.js",
+    "file": "assets/index.ts-CgjHhVaT.js",
     "name": "index.ts",
     "src": "src/background/index.ts",
     "isEntry": true
   },
   "src/content/index.ts": {
-    "file": "assets/index.ts-BCeFuHIY.js",
+    "file": "assets/index.ts-Drmrtx0w.js",
     "name": "index.ts",
     "src": "src/content/index.ts",
-    "isEntry": true
+    "isEntry": true,
+    "imports": [
+      "_settings-C_x4bTXh.js"
+    ]
   },
   "src/content/main-world.ts": {
-    "file": "assets/main-world.ts-BKE2XNth.js",
+    "file": "assets/main-world.ts-uI6TAnla.js",
     "name": "main-world.ts",
     "src": "src/content/main-world.ts",
     "isEntry": true
   },
   "src/popup/index.html": {
-    "file": "assets/index.html-CxI30wec.js",
+    "file": "assets/index.html-DnbAT8kq.js",
     "name": "index.html",
     "src": "src/popup/index.html",
     "isEntry": true,
     "imports": [
-      "_index-BjB98e0e.js"
+      "_index-DU2K6woN.js"
     ]
   },
   "src/sidepanel/index.html": {
-    "file": "assets/index.html-DB_acdwk.js",
+    "file": "assets/index.html-DWw8ib3O.js",
     "name": "index.html",
     "src": "src/sidepanel/index.html",
     "isEntry": true,
     "imports": [
-      "_index-BjB98e0e.js"
+      "_index-DU2K6woN.js",
+      "_settings-C_x4bTXh.js"
     ]
   }
 }

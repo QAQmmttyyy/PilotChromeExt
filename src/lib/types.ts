@@ -17,7 +17,7 @@ export interface WorkflowContext {
 
 // ============== Recording Types ==============
 
-export type RecordedStepType = 'click' | 'input' | 'navigate' | 'submit' | 'select' | 'keypress';
+export type RecordedStepType = 'click' | 'input' | 'navigate' | 'submit' | 'select' | 'keypress' | 'ai_step';
 
 export interface RecordedElement {
   tag: string;

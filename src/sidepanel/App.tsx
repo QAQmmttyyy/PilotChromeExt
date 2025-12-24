@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Plus, Trash2, ArrowLeft, Save, Sparkles, Settings, X, MessageSquare, RotateCcw, Brain, Circle, Square, Pause, Mouse, Type, Navigation, Key, List } from 'lucide-react';
+import { Play, Plus, Trash2, ArrowLeft, Save, Sparkles, Settings, X, MessageSquare, RotateCcw, Brain, Circle, Square, Pause, Mouse, Type, Navigation, Key, List, Pencil } from 'lucide-react';
 import { Script, storage } from '../lib/storage';
 import { parseScriptToWorkflow } from '../lib/parser';
 import { generateScriptStream, cleanGeneratedCode, buildUserMessage, buildRecordingContext, AVAILABLE_MODELS, ChatMessage, getModelInfo } from '../lib/ai';
@@ -65,6 +65,8 @@ function StepIcon({ type }: { type: RecordedStep['type'] }) {
       return <List size={12} className="text-cyan-500" />;
     case 'keypress':
       return <Key size={12} className="text-pink-500" />;
+    case 'ai_step':
+      return <Sparkles size={12} className="text-purple-500" />;
     default:
       return <Circle size={12} className="text-slate-400" />;
   }
@@ -85,6 +87,8 @@ function getStepDescription(step: RecordedStep): string {
       return `选择 "${step.value}"`;
     case 'keypress':
       return `按键 ${step.key}`;
+    case 'ai_step':
+      return `AI 指令: ${step.value}`;
     default:
       return step.type;
   }
@@ -98,8 +102,10 @@ function RecordingPanel({
   onPause,
   onResume,
   onDeleteStep, 
+  onUpdateStep,
   onClear,
-  onUseRecording
+  onUseRecording,
+  onAddAiStep
 }: { 
   session: RecordingSession | null;
   onStart: () => void;
@@ -107,19 +113,48 @@ function RecordingPanel({
   onPause: () => void;
   onResume: () => void;
   onDeleteStep: (stepId: string) => void;
+  onUpdateStep: (stepId: string, updates: Partial<RecordedStep>) => void;
   onClear: () => void;
   onUseRecording: () => void;
+  onAddAiStep: (instruction: string) => void;
 }) {
   const isRecording = session?.status === 'recording';
   const isPaused = session?.status === 'paused';
   const hasSteps = session && session.steps.length > 0;
   const stepsEndRef = useRef<HTMLDivElement>(null);
+  const [showAiInput, setShowAiInput] = useState(false);
+  const [aiInstruction, setAiInstruction] = useState('');
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
 
   useEffect(() => {
     if (hasSteps) {
       stepsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [session?.steps.length]);
+
+  const handleAddAiStep = () => {
+    if (aiInstruction.trim()) {
+      onAddAiStep(aiInstruction.trim());
+      setAiInstruction('');
+      setShowAiInput(false);
+    }
+  };
+
+  const startEditing = (step: RecordedStep) => {
+    if (step.type === 'ai_step') {
+      setEditingStepId(step.id);
+      setEditingValue(step.value || '');
+    }
+  };
+
+  const saveEditing = () => {
+    if (editingStepId && editingValue.trim()) {
+      onUpdateStep(editingStepId, { value: editingValue.trim() });
+    }
+    setEditingStepId(null);
+    setEditingValue('');
+  };
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -135,7 +170,7 @@ function RecordingPanel({
         </div>
         
         <div className="flex items-center gap-1">
-          {!session || session.status === 'stopped' ? (
+          {(!session || session.status === 'stopped') ? (
             <button
               onClick={onStart}
               className="flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors"
@@ -146,13 +181,23 @@ function RecordingPanel({
           ) : (
             <>
               {isRecording ? (
-                <button
-                  onClick={onPause}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-yellow-500 text-white text-xs rounded-lg hover:bg-yellow-600 transition-colors"
-                >
-                  <Pause size={12} />
-                  暂停
-                </button>
+                <>
+                  <button
+                    onClick={() => setShowAiInput(!showAiInput)}
+                    className={`flex items-center gap-1 px-2.5 py-1.5 ${showAiInput ? 'bg-purple-600' : 'bg-purple-500'} text-white text-xs rounded-lg hover:bg-purple-600 transition-colors`}
+                    title="添加 AI 步骤"
+                  >
+                    <Sparkles size={12} />
+                    AI Step
+                  </button>
+                  <button
+                    onClick={onPause}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-yellow-500 text-white text-xs rounded-lg hover:bg-yellow-600 transition-colors"
+                  >
+                    <Pause size={12} />
+                    暂停
+                  </button>
+                </>
               ) : (
                 <button
                   onClick={onResume}
@@ -173,6 +218,37 @@ function RecordingPanel({
           )}
         </div>
       </div>
+
+      {showAiInput && isRecording && (
+        <div className="px-4 py-3 bg-purple-50 border-b border-purple-100 flex gap-2">
+          <input
+            autoFocus
+            type="text"
+            value={aiInstruction}
+            onChange={(e) => setAiInstruction(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                handleAddAiStep();
+              }
+            }}
+            placeholder="描述 AI 需要执行的操作..."
+            className="flex-1 text-xs border border-purple-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-400"
+          />
+          <button
+            onClick={handleAddAiStep}
+            disabled={!aiInstruction.trim()}
+            className="px-3 py-1.5 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 disabled:opacity-50"
+          >
+            添加
+          </button>
+          <button
+            onClick={() => setShowAiInput(false)}
+            className="p-1.5 text-slate-400 hover:text-slate-600"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
       
       {hasSteps && (
         <>
@@ -184,15 +260,51 @@ function RecordingPanel({
               >
                 <span className="text-xs text-slate-400 w-4 shrink-0 pt-0.5">{idx + 1}</span>
                 <div className="shrink-0 pt-0.5"><StepIcon type={step.type} /></div>
-                <span className="flex-1 text-xs text-slate-600 break-all">
-                  {getStepDescription(step)}
-                </span>
-                <button
-                  onClick={() => onDeleteStep(step.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-opacity shrink-0"
-                >
-                  <X size={12} />
-                </button>
+                
+                {editingStepId === step.id ? (
+                  <div className="flex-1 flex gap-1">
+                    <input
+                      autoFocus
+                      className="flex-1 text-xs border border-purple-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                      value={editingValue}
+                      onChange={(e) => setEditingValue(e.target.value)}
+                      onBlur={saveEditing}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                          saveEditing();
+                        } else if (e.key === 'Escape') {
+                          setEditingStepId(null);
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <span 
+                    className={`flex-1 text-xs text-slate-600 break-all ${step.type === 'ai_step' ? 'cursor-pointer hover:text-purple-600' : ''}`}
+                    onClick={() => startEditing(step)}
+                    title={step.type === 'ai_step' ? '点击编辑' : undefined}
+                  >
+                    {getStepDescription(step)}
+                  </span>
+                )}
+                
+                <div className="flex items-center gap-0.5 shrink-0">
+                  {step.type === 'ai_step' && (
+                    <button
+                      onClick={() => startEditing(step)}
+                      className="p-1 text-slate-400 hover:text-purple-600 transition-colors"
+                      title="编辑指令"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => onDeleteStep(step.id)}
+                    className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               </div>
             ))}
             <div ref={stepsEndRef} />
@@ -358,6 +470,8 @@ function App() {
   const [codeUpdateStatus, setCodeUpdateStatus] = useState<'idle' | 'updated'>('idle');
   const [streamingContent, setStreamingContent] = useState('');
   
+  const saveTimeoutRef = useRef<number | null>(null);
+
   // Recording
   const [recordingSession, setRecordingSession] = useState<RecordingSession | null>(null);
   const [recordingContext, setRecordingContext] = useState<string>('');
@@ -489,6 +603,36 @@ function App() {
       console.error('Failed to clear recording:', e);
     }
   };
+
+  const handleAddAiStep = async (instruction: string) => {
+    if (!currentScript) return;
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'RECORDING_ADD_AI_STEP',
+        payload: { scriptId: currentScript.id, instruction }
+      });
+      if (response?.session) {
+        setRecordingSession(response.session);
+      }
+    } catch (e) {
+      console.error('Failed to add AI step:', e);
+    }
+  };
+
+  const handleUpdateStep = async (stepId: string, updates: Partial<RecordedStep>) => {
+    if (!currentScript) return;
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'RECORDING_UPDATE_STEP',
+        payload: { scriptId: currentScript.id, stepId, updates }
+      });
+      if (response?.session) {
+        setRecordingSession(response.session);
+      }
+    } catch (e) {
+      console.error('Failed to update step:', e);
+    }
+  };
   
   const handleUseRecording = () => {
     if (!recordingSession || recordingSession.steps.length === 0) return;
@@ -570,6 +714,25 @@ function App() {
       setTimeout(() => setSaveStatus('idle'), 2000);
     }
   };
+
+  // 自动保存逻辑
+  useEffect(() => {
+    if (view === 'editor' && currentScript && !isGenerating) {
+      if (saveTimeoutRef.current) {
+        window.clearTimeout(saveTimeoutRef.current);
+      }
+      
+      saveTimeoutRef.current = window.setTimeout(() => {
+        handleSave();
+      }, 1000); // 1秒延迟
+    }
+    
+    return () => {
+      if (saveTimeoutRef.current) {
+        window.clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [currentScript?.code, currentScript?.name, isGenerating, view]);
 
   const handleRun = async (script: Script) => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -799,8 +962,10 @@ function App() {
             onPause={handlePauseRecording}
             onResume={handleResumeRecording}
             onDeleteStep={handleDeleteStep}
+            onUpdateStep={handleUpdateStep}
             onClear={handleClearRecording}
             onUseRecording={handleUseRecording}
+            onAddAiStep={handleAddAiStep}
           />
 
           {/* AI 助手 */}

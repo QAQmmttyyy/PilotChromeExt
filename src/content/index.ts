@@ -2,8 +2,42 @@
 // Pilot: Pure Bridge + Recording Event Capture
 import { createStepPayload } from '../lib/recorder';
 import { RecordingStepPayload } from '../lib/types';
+import { settings } from '../lib/settings';
 
 console.log('Pilot Bridge (Isolated World) loaded');
+
+// ============== Initial Configuration ==============
+function syncAIConfig() {
+  settings.getAIConfig().then(config => {
+    window.postMessage({
+      source: 'PILOT_ISOLATED',
+      type: 'SET_AI_CONFIG',
+      payload: config
+    }, '*');
+  });
+}
+
+syncAIConfig();
+
+// 监听来自 Main World 的信号
+window.addEventListener('message', (event) => {
+  if (event.source !== window || !event.data || event.data.source !== 'PILOT_MAIN') {
+    return;
+  }
+
+  if (event.data.type === 'MAIN_WORLD_READY') {
+    console.log('[Pilot] Main World ready, syncing config');
+    syncAIConfig();
+  }
+});
+
+// 监听存储变化，实时同步配置到 Main World
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.pilot_settings) {
+    console.log('[Pilot] Settings changed, syncing to Main World');
+    syncAIConfig();
+  }
+});
 
 // ============== Recording State ==============
 let isRecording = false;

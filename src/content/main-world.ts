@@ -1,6 +1,43 @@
 // Main World Content Script
 // Pilot: Pure Bridge - 只做通信，不管业务逻辑
+import { PageAgent } from 'page-agent';
+
 console.log('Pilot Bridge (Main World) loaded');
+
+// 监听来自 Isolated World 的配置
+window.addEventListener('message', (event) => {
+  if (event.source !== window || !event.data || event.data.source !== 'PILOT_ISOLATED') {
+    return;
+  }
+  
+  if (event.data.type === 'SET_AI_CONFIG') {
+    const config = event.data.payload;
+    if (config && config.apiKey) {
+      // 初始化 or 更新 PageAgent
+      console.log('[Pilot] Received AI config update');
+      const baseURL = config.endpoint ? config.endpoint.replace('/chat/completions', '') : 'https://openrouter.ai/api/v1';
+      
+      try {
+        (window as any).pageAgent = new PageAgent({
+          apiKey: config.apiKey,
+          model: config.model,
+          baseURL: baseURL,
+        });
+        console.log('[Pilot] PageAgent initialized successfully');
+      } catch (e) {
+        console.error('[Pilot] Failed to initialize PageAgent:', e);
+      }
+    } else {
+      console.warn('[Pilot] AI Config received but apiKey is missing. PageAgent will not be initialized.');
+    }
+  }
+});
+
+// 通知 Isolated World：Main World 已就绪，请求配置
+window.postMessage({
+  source: 'PILOT_MAIN',
+  type: 'MAIN_WORLD_READY'
+}, '*');
 
 window.Pilot = {
   // 浏览器能力
