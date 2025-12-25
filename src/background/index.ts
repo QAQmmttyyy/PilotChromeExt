@@ -1,9 +1,74 @@
-import { WorkflowContext, WorkflowStep, RecordingSession, RecordedStep, RecordingStepPayload } from '../lib/types';
+import { WorkflowContext, WorkflowStep, RecordingSession, RecordedStep, RecordingStepPayload, ReadyEvent, ReadyEventType } from '../lib/types';
 
 console.log('Pilot background script loaded');
 
 const globalStore: Record<string, any> = {};
 const workflows = new Map<number, WorkflowContext>();
+
+// ============== Ready Event System ==============
+interface ReadyResolver {
+  resolve: () => void;
+  reject: (reason: string) => void;
+  requiredEvents: Set<ReadyEventType>;
+  receivedEvents: Set<ReadyEventType>;
+  timeout?: ReturnType<typeof setTimeout>;
+}
+
+const readyResolvers = new Map<number, ReadyResolver>();
+
+// 注意：webNavigation.onCommitted 监听器在 Navigation Tracking 部分（第 305 行附近）
+
+function waitForPageReady(tabId: number, requiredEvents: ReadyEventType[] = ['PAGE_FULLY_READY'], timeoutMs: number = 10000): Promise<void> {
+  // 如果已有等待中的 resolver，先清理它
+  const existingResolver = readyResolvers.get(tabId);
+  if (existingResolver) {
+    if (existingResolver.timeout) clearTimeout(existingResolver.timeout);
+    existingResolver.reject('Cancelled by new ready wait request');
+    readyResolvers.delete(tabId);
+  }
+
+  return new Promise((resolve, reject) => {
+    const resolver: ReadyResolver = {
+      resolve,
+      reject,
+      requiredEvents: new Set(requiredEvents),
+      receivedEvents: new Set(),
+      timeout: setTimeout(() => {
+        readyResolvers.delete(tabId);
+        const msg = `Page ready timeout (${timeoutMs}ms) for tab ${tabId}. Required: ${requiredEvents.join(', ')}`;
+        console.error(`[Pilot Engine] ${msg}`);
+        reject(msg);
+      }, timeoutMs)
+    };
+
+    readyResolvers.set(tabId, resolver);
+    console.log(`[Pilot Engine] Waiting for page ready in Tab ${tabId}:`, requiredEvents);
+  });
+}
+
+function handleReadyEvent(event: ReadyEvent) {
+  const { tabId, type } = event;
+  console.log(`[Pilot Engine] Ready event received: ${type} for Tab ${tabId}`);
+
+  const resolver = readyResolvers.get(tabId);
+  if (!resolver) {
+    console.log(`[Pilot Engine] No resolver found for Tab ${tabId}, ignoring event`);
+    return;
+  }
+
+  resolver.receivedEvents.add(type);
+  console.log(`[Pilot Engine] Tab ${tabId} - required: [${Array.from(resolver.requiredEvents)}], received: [${Array.from(resolver.receivedEvents)}]`);
+
+  // 检查是否所有必需的事件都已收到
+  const allReceived = Array.from(resolver.requiredEvents).every(e => resolver.receivedEvents.has(e));
+
+  if (allReceived) {
+    if (resolver.timeout) clearTimeout(resolver.timeout);
+    readyResolvers.delete(tabId);
+    console.log(`[Pilot Engine] Page fully ready in Tab ${tabId}`);
+    resolver.resolve();
+  }
+}
 
 // ============== Recording Session Management ==============
 let sessions: Record<string, RecordingSession> = {}; // scriptId -> RecordingSession
@@ -42,16 +107,16 @@ function createRecordingSession(tabId: number, url: string, scriptId: string): R
 
 function addStepToSession(payload: RecordingStepPayload) {
   if (!activeScriptId || !sessions[activeScriptId] || sessions[activeScriptId].status !== 'recording') return;
-  
+
   const step: RecordedStep = {
     id: crypto.randomUUID(),
     timestamp: Date.now(),
     ...payload,
   };
-  
+
   sessions[activeScriptId].steps.push(step);
   console.log(`[Pilot Recording] Step added to script ${activeScriptId}:`, step.type);
-  
+
   saveSessionsToStorage();
   notifySidePanelUpdate(activeScriptId);
 }
@@ -59,12 +124,12 @@ function addStepToSession(payload: RecordingStepPayload) {
 function addNavigationStep(tabId: number, url: string, title: string) {
   if (!activeScriptId || !sessions[activeScriptId] || sessions[activeScriptId].status !== 'recording') return;
   if (sessions[activeScriptId].tabId !== tabId) return;
-  
+
   const session = sessions[activeScriptId];
   // 避免重复记录相同 URL
   const lastStep = session.steps[session.steps.length - 1];
   if (lastStep?.type === 'navigate' && lastStep.url === url) return;
-  
+
   const step: RecordedStep = {
     id: crypto.randomUUID(),
     timestamp: Date.now(),
@@ -72,10 +137,10 @@ function addNavigationStep(tabId: number, url: string, title: string) {
     url,
     pageTitle: title,
   };
-  
+
   session.steps.push(step);
   console.log(`[Pilot Recording] Navigation step added to script ${activeScriptId}:`, url);
-  
+
   saveSessionsToStorage();
   notifySidePanelUpdate(activeScriptId);
 }
@@ -85,24 +150,24 @@ function notifySidePanelUpdate(scriptId: string) {
     type: 'RECORDING_SESSION_UPDATE',
     payload: sessions[scriptId],
     scriptId
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 async function startRecording(tabId: number, scriptId: string) {
   const tab = await chrome.tabs.get(tabId);
-  
+
   activeScriptId = scriptId;
   sessions[scriptId] = createRecordingSession(tabId, tab.url || '', scriptId);
-  
+
   // 添加初始导航步骤
   addNavigationStep(tabId, tab.url || '', tab.title || '');
-  
+
   // 通知 Content Script 开始录制
   await chrome.tabs.sendMessage(tabId, {
     type: 'RECORDING_CONTROL',
     action: 'start',
   });
-  
+
   console.log(`[Pilot Recording] Started for script ${scriptId} in tab ${tabId}`);
   saveSessionsToStorage();
   notifySidePanelUpdate(scriptId);
@@ -110,11 +175,11 @@ async function startRecording(tabId: number, scriptId: string) {
 
 async function stopRecording() {
   if (!activeScriptId || !sessions[activeScriptId]) return;
-  
+
   const session = sessions[activeScriptId];
   const tabId = session.tabId;
   session.status = 'stopped';
-  
+
   // 通知 Content Script 停止录制
   try {
     await chrome.tabs.sendMessage(tabId, {
@@ -124,7 +189,7 @@ async function stopRecording() {
   } catch (e) {
     console.warn('[Pilot Recording] Could not notify content script:', e);
   }
-  
+
   console.log(`[Pilot Recording] Stopped for script ${activeScriptId}. Total steps: ${session.steps.length}`);
   saveSessionsToStorage();
   notifySidePanelUpdate(activeScriptId);
@@ -134,10 +199,10 @@ async function stopRecording() {
 
 async function pauseRecording() {
   if (!activeScriptId || !sessions[activeScriptId]) return;
-  
+
   const session = sessions[activeScriptId];
   session.status = 'paused';
-  
+
   try {
     await chrome.tabs.sendMessage(session.tabId, {
       type: 'RECORDING_CONTROL',
@@ -146,7 +211,7 @@ async function pauseRecording() {
   } catch (e) {
     console.warn('[Pilot Recording] Could not notify content script:', e);
   }
-  
+
   console.log(`[Pilot Recording] Paused for script ${activeScriptId}`);
   saveSessionsToStorage();
   notifySidePanelUpdate(activeScriptId);
@@ -154,10 +219,10 @@ async function pauseRecording() {
 
 async function resumeRecording() {
   if (!activeScriptId || !sessions[activeScriptId]) return;
-  
+
   const session = sessions[activeScriptId];
   session.status = 'recording';
-  
+
   try {
     await chrome.tabs.sendMessage(session.tabId, {
       type: 'RECORDING_CONTROL',
@@ -166,7 +231,7 @@ async function resumeRecording() {
   } catch (e) {
     console.warn('[Pilot Recording] Could not notify content script:', e);
   }
-  
+
   console.log(`[Pilot Recording] Resumed for script ${activeScriptId}`);
   saveSessionsToStorage();
   notifySidePanelUpdate(activeScriptId);
@@ -174,7 +239,7 @@ async function resumeRecording() {
 
 function deleteStep(scriptId: string, stepId: string) {
   if (!sessions[scriptId]) return;
-  
+
   sessions[scriptId].steps = sessions[scriptId].steps.filter(s => s.id !== stepId);
   console.log(`[Pilot Recording] Step deleted from script ${scriptId}: ${stepId}`);
   saveSessionsToStorage();
@@ -183,16 +248,16 @@ function deleteStep(scriptId: string, stepId: string) {
 
 function updateStep(scriptId: string, stepId: string, updates: Partial<RecordedStep>) {
   if (!sessions[scriptId]) return;
-  
+
   const stepIdx = sessions[scriptId].steps.findIndex(s => s.id === stepId);
   if (stepIdx === -1) return;
-  
+
   sessions[scriptId].steps[stepIdx] = {
     ...sessions[scriptId].steps[stepIdx],
     ...updates,
     timestamp: Date.now(), // 更新时间戳
   };
-  
+
   console.log(`[Pilot Recording] Step updated in script ${scriptId}: ${stepId}`);
   saveSessionsToStorage();
   notifySidePanelUpdate(scriptId);
@@ -200,7 +265,7 @@ function updateStep(scriptId: string, stepId: string, updates: Partial<RecordedS
 
 function addAiStep(scriptId: string, instruction: string) {
   if (!sessions[scriptId] || sessions[scriptId].status !== 'recording') return;
-  
+
   const step: RecordedStep = {
     id: crypto.randomUUID(),
     timestamp: Date.now(),
@@ -209,7 +274,7 @@ function addAiStep(scriptId: string, instruction: string) {
     pageTitle: 'AI Step',
     value: instruction
   };
-  
+
   // 尽量填充当前 URL
   chrome.tabs.query({ active: true, currentWindow: true }).then(tabs => {
     if (tabs[0]) {
@@ -232,31 +297,51 @@ function clearRecording(scriptId: string) {
   // 注意：不需要调用 notifySidePanelUpdate，因为会话已被删除
 }
 
-// ============== Navigation Tracking ==============
-chrome.webNavigation.onCompleted.addListener((details) => {
+// ============== Navigation Tracking (Enhanced) ==============
+
+// 监听导航开始事件（比 onCompleted 更早）
+chrome.webNavigation.onCommitted.addListener((details) => {
   if (details.frameId !== 0) return; // 只处理主 frame
-  
-  if (activeScriptId && sessions[activeScriptId]?.status === 'recording' && sessions[activeScriptId].tabId === details.tabId) {
-    chrome.tabs.get(details.tabId).then(tab => {
-      addNavigationStep(details.tabId, details.url, tab.title || '');
-      
+
+  const tabId = details.tabId;
+  const workflow = workflows.get(tabId);
+
+  // 1. 工作流导航监控（仅日志）
+  if (workflow && workflow.status === 'running') {
+    console.log(`[Pilot Engine] Navigation detected in Tab ${tabId}: ${details.url}`);
+  }
+
+  // 2. 录制导航监控
+  if (activeScriptId && sessions[activeScriptId]?.status === 'recording' && sessions[activeScriptId].tabId === tabId) {
+    chrome.tabs.get(tabId).then(tab => {
+      addNavigationStep(tabId, details.url, tab.title || '');
+
       // 确保内容脚本开始录制
-      chrome.tabs.sendMessage(details.tabId, {
+      chrome.tabs.sendMessage(tabId, {
         type: 'RECORDING_CONTROL',
         action: 'start',
-      }).catch(() => {
-        // 脚本可能还没准备好，没关系，脚本加载时会主动问 status
-      });
+      }).catch(() => { });
     });
   }
 });
 
+// 监听 History State 更新（SPA 内导航）
+// 监听 History State 更新（SPA 内导航）
 chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
   if (details.frameId !== 0) return;
-  
-  if (activeScriptId && sessions[activeScriptId]?.status === 'recording' && sessions[activeScriptId].tabId === details.tabId) {
-    chrome.tabs.get(details.tabId).then(tab => {
-      addNavigationStep(details.tabId, details.url, tab.title || '');
+
+  const tabId = details.tabId;
+
+  // 1. 工作流导航监控（仅日志）
+  const workflow = workflows.get(tabId);
+  if (workflow && workflow.status === 'running') {
+    console.log(`[Pilot Engine] History state updated in Tab ${tabId}: ${details.url}`);
+  }
+
+  // 2. 录制导航监控
+  if (activeScriptId && sessions[activeScriptId]?.status === 'recording' && sessions[activeScriptId].tabId === tabId) {
+    chrome.tabs.get(tabId).then(tab => {
+      addNavigationStep(tabId, details.url, tab.title || '');
     });
   }
 });
@@ -277,12 +362,43 @@ chrome.tabs.onCreated.addListener((tab) => {
 // ============== Message Handling ==============
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('[Pilot BG] Received message:', request.type);
-  
+
+  // 处理就绪事件
+  if (request.type && ['CONTENT_SCRIPT_READY', 'PAGE_AGENT_READY', 'PAGE_FULLY_READY'].includes(request.type)) {
+    const tabId = sender.tab?.id;
+    if (tabId) {
+      handleReadyEvent({
+        type: request.type as ReadyEventType,
+        tabId,
+        timestamp: Date.now()
+      });
+    }
+    sendResponse({ success: true });
+    return;
+  }
+
   if (request.type === 'PILOT_BRIDGE_ACTION') {
     handleBridgeAction(request.action, request.payload, sender);
   } else if (request.type === 'START_WORKFLOW') {
     const { steps, tabId } = request.payload;
-    startWorkflow(steps, tabId);
+    
+    // 异步处理：先确保页面就绪，再开始 workflow
+    (async () => {
+      try {
+        // 1. 发送 RESET_AGENT 触发配置同步
+        chrome.tabs.sendMessage(tabId, { type: 'RESET_AGENT' }).catch(() => {});
+        
+        // 2. 等待页面就绪（包括 PageAgent 初始化）
+        console.log(`[Pilot Engine] Waiting for page ready before starting workflow...`);
+        await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 10000);
+        console.log(`[Pilot Engine] Page ready, starting workflow`);
+        
+        // 3. 页面已就绪，开始 workflow
+        startWorkflow(steps, tabId);
+      } catch (err) {
+        console.error('[Pilot Engine] Failed to prepare workflow:', err);
+      }
+    })();
   } else if (request.type === 'RECORDING_STEP') {
     addStepToSession(request.payload);
   } else if (request.type === 'RECORDING_START') {
@@ -309,7 +425,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ session: null });
       return;
     }
-    
+
     const sendRes = () => {
       sendResponse({ session: sessions[scriptId] || null });
     };
@@ -343,22 +459,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const { scriptId } = request.payload;
     clearRecording(scriptId);
     sendResponse({ success: true });
-  } else if (request.type === 'STEP_NAVIGATING') {
-    // 脚本触发了导航，标记状态
-    const tabId = sender.tab?.id;
-    if (tabId) {
-      const workflow = workflows.get(tabId);
-      if (workflow && workflow.status === 'running') {
-        workflow.stepNavigating = true;
-        console.log(`[Pilot Engine] Step triggered navigation in Tab ${tabId}`);
-      }
-    }
   } else if (request.type === 'RECORDING_GET_STATUS') {
     const checkStatus = () => {
-      sendResponse({ 
+      sendResponse({
         isRecording: activeScriptId !== null && sessions[activeScriptId]?.status === 'recording',
         activeScriptId,
-        session: activeScriptId ? sessions[activeScriptId] : null 
+        session: activeScriptId ? sessions[activeScriptId] : null
       });
     };
 
@@ -376,23 +482,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     } else {
       checkStatus();
-    }
-  }
-});
-
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  const workflow = workflows.get(tabId);
-  if (workflow && workflow.status === 'running') {
-    if (changeInfo.status === 'complete') {
-      if (workflow.stepNavigating) {
-        // 脚本触发的导航，自动推进到下一步
-        console.log(`[Pilot Engine] Tab ${tabId} loaded after script navigation. Advancing...`);
-        workflow.stepNavigating = false;
-        advanceWorkflow(tabId);
-      } else {
-        console.log(`[Pilot Engine] Tab ${tabId} loaded. Executing step...`);
-        executeCurrentStep(tabId);
-      }
     }
   }
 });
@@ -455,7 +544,7 @@ function handleBridgeAction(action: string, payload: any, sender: chrome.runtime
 
 async function startWorkflow(steps: WorkflowStep[], tabId: number) {
   console.log(`[Pilot Engine] Starting workflow in Tab ${tabId} with ${steps.length} steps`);
-  
+
   const workflow: WorkflowContext = {
     currentStepIndex: 0,
     data: {},
@@ -463,17 +552,11 @@ async function startWorkflow(steps: WorkflowStep[], tabId: number) {
     tabId,
     status: 'running'
   };
-  
+
   workflows.set(tabId, workflow);
 
-  const firstStep = steps[0];
-  if (firstStep.url) {
-     console.log(`[Pilot Engine] First step requires navigation to: ${firstStep.url}`);
-     chrome.tabs.update(tabId, { url: firstStep.url });
-  } else {
-     console.log(`[Pilot Engine] First step has no URL, executing directly`);
-     executeCurrentStep(tabId);
-  }
+  // 直接执行第一步，executeCurrentStep 会处理导航和就绪
+  executeCurrentStep(tabId);
 }
 
 async function executeCurrentStep(tabId: number) {
@@ -484,7 +567,7 @@ async function executeCurrentStep(tabId: number) {
   }
 
   const { steps, currentStepIndex } = workflow;
-  
+
   if (currentStepIndex >= steps.length) {
     console.log(`[Pilot Engine] All steps completed for Tab ${tabId}.`);
     workflow.status = 'completed';
@@ -496,90 +579,124 @@ async function executeCurrentStep(tabId: number) {
   console.log(`[Pilot Engine] Executing Step ${currentStepIndex + 1}: ${step.name}`);
 
   try {
-     const data = workflow.data;
-     const code = step.code;
+    // ===== Phase 1: 导航（如果需要）=====
+    // 注意：workflow 开始前已经确保页面就绪，所以只有导航时才需要等待
+    if (step.url) {
+      const currentTab = await chrome.tabs.get(tabId);
+      if (currentTab.url !== step.url) {
+        console.log(`[Pilot Engine] Navigating to: ${step.url}`);
+        await chrome.tabs.update(tabId, { url: step.url });
 
-     // 🔍 调试：打印 AI 生成的脚本内容
-     console.log(`[Pilot Engine] 📜 AI Generated Code:\n${code}`);
+        // 导航后等待新页面就绪
+        console.log(`[Pilot Engine] Waiting for new page to be ready...`);
+        await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
+        console.log(`[Pilot Engine] New page ready`);
+      }
+    }
+    // 如果不需要导航，页面在 workflow 开始前已经就绪，直接执行
 
-     // 🛡️ 防御性检查：拦截非法选择器（运行时保护）
-     const illegalSelectorPatterns = [
-       /:has-text\(/i,
-       /:contains\(/i,
-       /:text\(/i,
-       />>.*["']/,  // Playwright 的 >> "文本" 语法
-     ];
-     
-     for (const pattern of illegalSelectorPatterns) {
-       if (pattern.test(code)) {
-         const match = code.match(pattern);
-         console.error(`[Pilot Engine] 🛡️ 检测到非法选择器: ${match?.[0]}`);
-         const errorMsg = `脚本包含非法选择器: "${match?.[0] || '未知'}"\n\n浏览器 querySelector 不支持 Playwright/Cypress 伪类。\n请使用标准选择器：id、name、aria-label、role、语义标签+属性。\n\n示例：\n❌ button:has-text("分享")\n✅ button[aria-label="分享"]\n✅ #share-btn\n✅ [data-action="share"]`;
-         
-         // 直接通知用户
-         await chrome.scripting.executeScript({
-           target: { tabId },
-           func: (msg: string) => alert(msg),
-           args: [errorMsg]
-         });
-         
-         workflow.status = 'failed';
-         workflows.delete(tabId);
-         console.error(`[Pilot Engine] 🛡️ 拦截非法选择器: ${match?.[0]}`);
-         return;
-       }
-     }
-     
-     console.log(`[Pilot Engine] ✅ 选择器检查通过，准备执行脚本...`);
+    // ===== Phase 2: 记录执行前 URL =====
+    const beforeExecuteTab = await chrome.tabs.get(tabId);
+    workflow.executingUrl = beforeExecuteTab.url;
+    console.log(`[Pilot Engine] Page ready. Current URL: ${workflow.executingUrl}`);
 
-    // 使用 Main World 执行（直接 eval，绕过 CSP 对 <script> 标签的限制）
-    // chrome.scripting.executeScript 在 world: 'MAIN' 里可以使用 eval，不受 CSP 约束
+    // ===== Phase 3: 脚本安全检查 =====
+    const data = workflow.data;
+    const code = step.code;
+
+    console.log(`[Pilot Engine] 📜 Code:\n${code.slice(0, 200)}...`);
+
+    // 防御性检查：拦截非法选择器
+    const illegalSelectorPatterns = [
+      /:has-text\(/i,
+      /:contains\(/i,
+      /:text\(/i,
+      />>.*["']/,
+    ];
+
+    for (const pattern of illegalSelectorPatterns) {
+      if (pattern.test(code)) {
+        const match = code.match(pattern);
+        console.error(`[Pilot Engine] 🛡️ 检测到非法选择器: ${match?.[0]}`);
+        const errorMsg = `脚本包含非法选择器: "${match?.[0] || '未知'}"\n\n浏览器 querySelector 不支持 Playwright/Cypress 伪类。\n请使用标准选择器：id、name、aria-label、role、语义标签+属性。\n\n示例：\n❌ button:has-text("分享")\n✅ button[aria-label="分享"]\n✅ #share-btn\n✅ [data-action="share"]`;
+
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          func: (msg: string) => alert(msg),
+          args: [errorMsg]
+        });
+
+        workflow.status = 'failed';
+        workflows.delete(tabId);
+        return;
+      }
+    }
+
+    console.log(`[Pilot Engine] ✅ 安全检查通过，开始执行...`);
+
+    // ===== Phase 4: 执行脚本 =====
     await chrome.scripting.executeScript({
       target: { tabId },
       func: (injectedData: Record<string, any>, injectedCode: string) => {
-         console.log('[Pilot] Executing script in Main World (via eval)...');
-         
-         // 1. 先注入数据到全局
-         (window as any).PilotData = injectedData;
-         
-         // 2. 监听页面卸载，通知 background 脚本触发了导航
-         const notifyNavigation = () => {
-           // 使用 sendBeacon 确保消息能在页面卸载前发出
-           // 但 Chrome extension 不支持 sendBeacon 到 runtime，用 postMessage 替代
-           window.postMessage({ 
-             source: 'PILOT_SCRIPT', 
-             action: 'stepNavigating',
-             payload: {} 
-           }, '*');
-         };
-         window.addEventListener('beforeunload', notifyNavigation, { once: true });
-         window.addEventListener('pagehide', notifyNavigation, { once: true });
-         
-         // 3. 使用 eval 直接执行（绕过 CSP）
-         try {
-           console.log('[Pilot Script] Starting execution...');
-           eval(injectedCode);
-         } catch (e) {
-           console.error('[Pilot Script] Execution Error:', e);
-           const errorMsg = e instanceof Error ? e.message : String(e);
-           if ((window as any).Pilot?.workflow?.fail) {
-             (window as any).Pilot.workflow.fail(errorMsg);
-           }
-         }
-         
-         // 4. 清理 PilotData（如果脚本同步完成）
-         // 注意：如果脚本触发了导航，这行不会执行
-         console.log('[Pilot] Script execution completed');
+        console.log('[Pilot] Executing script in Main World...');
+
+        // 注入数据到全局
+        (window as any).PilotData = injectedData;
+
+        // 直接执行（不再监听 beforeunload）
+        try {
+          console.log('[Pilot Script] Starting execution...');
+          eval(injectedCode);
+        } catch (e) {
+          console.error('[Pilot Script] Execution Error:', e);
+          const errorMsg = e instanceof Error ? e.message : String(e);
+          if ((window as any).Pilot?.workflow?.fail) {
+            (window as any).Pilot.workflow.fail(errorMsg);
+          }
+        }
+
+        console.log('[Pilot] Script execution initiated');
       },
       args: [data, code],
       world: 'MAIN'
     });
-     
-     console.log(`[Pilot Engine] Script execution completed for Tab ${tabId}`);
 
-  } catch (err) {
+    console.log(`[Pilot Engine] Script injected into Tab ${tabId}`);
+
+    // ===== Phase 5: 检测导航 =====
+    // 短暂延迟后检查 URL 是否变化
+    await new Promise(r => setTimeout(r, 500));
+
+    const afterExecuteTab = await chrome.tabs.get(tabId);
+    const afterExecuteUrl = afterExecuteTab.url;
+
+    if (afterExecuteUrl !== workflow.executingUrl) {
+      console.log(`[Pilot Engine] Navigation detected: ${workflow.executingUrl} -> ${afterExecuteUrl}`);
+
+      // 等待新页面就绪
+      console.log(`[Pilot Engine] Waiting for new page to be ready...`);
+      await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
+      console.log(`[Pilot Engine] New page ready, continuing...`);
+    }
+
+    // ===== Phase 6: 等待工作流信号 =====
+    // 脚本会调用 workflow.next/finish/fail，这些信号会被 handleBridgeAction 处理
+
+  } catch (err: any) {
     console.error('[Pilot Engine] Execution failed:', err);
+    workflow.status = 'failed';
     workflows.delete(tabId);
+
+    // 通知用户
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: (msg: string) => alert(`Pilot 执行失败：\n${msg}`),
+        args: [err.message || String(err)]
+      });
+    } catch (e) {
+      console.error('[Pilot Engine] Failed to show error alert:', e);
+    }
   }
 }
 
@@ -598,10 +715,8 @@ function advanceWorkflow(tabId: number) {
   }
 
   const nextStep = steps[currentStepIndex];
-  if (nextStep.url) {
-    console.log(`[Pilot Engine] Step ${currentStepIndex + 1} requires navigation to: ${nextStep.url}`);
-    chrome.tabs.update(tabId, { url: nextStep.url });
-  } else {
-    executeCurrentStep(tabId);
-  }
+  console.log(`[Pilot Engine] Advancing to Step ${currentStepIndex + 1}: ${nextStep.name}`);
+
+  // 直接调用 executeCurrentStep，它会处理导航和就绪等待
+  executeCurrentStep(tabId);
 }

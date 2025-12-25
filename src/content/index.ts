@@ -6,6 +6,33 @@ import { settings } from '../lib/settings';
 
 console.log('Pilot Bridge (Isolated World) loaded');
 
+// ============== Ready Event System ==============
+let pageAgentReady = false;
+let contentScriptReady = false;
+
+// 发送就绪事件到 Background
+function sendReadyEvent(type: 'CONTENT_SCRIPT_READY' | 'PAGE_AGENT_READY' | 'PAGE_FULLY_READY') {
+  chrome.runtime.sendMessage({
+    type,
+    timestamp: Date.now()
+  }).catch(() => {
+    console.warn(`[Pilot] Failed to send ${type} event`);
+  });
+}
+
+// 立即发送 Content Script 就绪信号
+contentScriptReady = true;
+sendReadyEvent('CONTENT_SCRIPT_READY');
+console.log('[Pilot] Content Script ready signal sent');
+
+// 检查是否完全就绪
+function checkFullyReady() {
+  if (contentScriptReady && pageAgentReady) {
+    sendReadyEvent('PAGE_FULLY_READY');
+    console.log('[Pilot] Page fully ready signal sent');
+  }
+}
+
 // ============== Initial Configuration ==============
 function syncAIConfig() {
   settings.getAIConfig().then(config => {
@@ -28,6 +55,11 @@ window.addEventListener('message', (event) => {
   if (event.data.type === 'MAIN_WORLD_READY') {
     console.log('[Pilot] Main World ready, syncing config');
     syncAIConfig();
+  } else if (event.data.type === 'PAGE_AGENT_READY') {
+    console.log('[Pilot] PageAgent ready signal received from Main World');
+    pageAgentReady = true;
+    sendReadyEvent('PAGE_AGENT_READY');
+    checkFullyReady();
   }
 });
 
@@ -190,6 +222,10 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     }
     
     return true;
+  } else if (request.type === 'RESET_AGENT') {
+    console.log('[Pilot] Received RESET_AGENT request');
+    syncAIConfig();
+    return true;
   }
 });
 
@@ -212,13 +248,6 @@ window.addEventListener('message', (event) => {
     return;
   }
   const { action, payload } = event.data;
-  
-  // 特殊处理：脚本触发导航
-  if (action === 'stepNavigating') {
-    chrome.runtime.sendMessage({ type: 'STEP_NAVIGATING' })
-      .catch(() => {}); // 页面卸载时可能失败，忽略
-    return;
-  }
   
   chrome.runtime.sendMessage({
     type: 'PILOT_BRIDGE_ACTION',

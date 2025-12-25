@@ -91,21 +91,20 @@ RECORDING_CONTEXT 是用户录制的操作流程，包含每一步的操作类�
    - 不需要等待就不要定义 waitFor。
 5. **错误必须终止流程**：任意一步失败都调用 \`window.Pilot.workflow.fail(reason)\` 并 return。
 6. **流程收尾必须明确**：
-    - 单步：\`finish()\`
-    - 多步：中间用 \`next(data)\`，最后一步用 \`finish()\`
+   - 单步：\`finish()\`
+   - 多步：中间用 \`next(data)\`，最后一步用 \`finish()\`
 7. **AI Step 集成**：如果录制中包含 \`ai_step\`（AI 指令），必须生成如下格式的代码：
    \`try {\`
-   \`  if (!window.pageAgent) throw new Error("PageAgent 未初始化");\`
+   \`  if (!window.pageAgent?.execute) throw new Error("PageAgent 未就绪");\`
    \`  await window.pageAgent.execute("用户指令");\`
    \`  window.Pilot.workflow.next();\`
    \`} catch (err) {\`
-   \`  // 忽略由于页面跳转导致的动作中断错误\`
    \`  if (err.message?.includes('disposed')) return;\`
    \`  window.Pilot.workflow.fail(err.message);\`
    \`}\`
-   - **必须使用 await**。
-   - 不要生成额外的 waitFor 或 selector，因为 pageAgent 会处理。
+   - 引擎保证就绪后才执行，无需轮询等待。
    - 必须包裹在上述 try-catch 中。
+   - disposed 错误通常由页面跳转触发，可忽略。
 8. **多步骤格式**：用顶层注释分隔：
    \`// === STEP: 名称 (https://目标URL可选) ===\`
    注释必须在顶层，不能写在函数内部。
@@ -217,7 +216,7 @@ function formatRecordedStep(step: RecordedStep, index: number): string {
     if (step.type === 'ai_step') {
       lines.push(`- AI 指令: "${step.value}"`);
     } else {
-      lines.push(`- 输入值: "${step.value}"`);
+    lines.push(`- 输入值: "${step.value}"`);
     }
   }
   

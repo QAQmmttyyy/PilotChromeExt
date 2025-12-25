@@ -13,8 +13,37 @@ window.addEventListener('message', (event) => {
   if (event.data.type === 'SET_AI_CONFIG') {
     const config = event.data.payload;
     if (config && config.apiKey) {
-      // 初始化 or 更新 PageAgent
-      console.log('[Pilot] Received AI config update');
+      // 增加配置指纹检查，避免不必要的重新初始化
+      const configHash = JSON.stringify(config);
+      const alreadyInitialized = (window as any).__lastAgentConfig === configHash && (window as any).pageAgent && !(window as any).pageAgent.disposed;
+      
+      if (alreadyInitialized) {
+        // 配置没变且实例可用，直接发送就绪信号即可
+        console.log('[Pilot] PageAgent already initialized and ready');
+        window.postMessage({
+          source: 'PILOT_MAIN',
+          type: 'PAGE_AGENT_READY'
+        }, '*');
+        return;
+      }
+      
+      (window as any).__lastAgentConfig = configHash;
+
+      // 1. 如果已有实例，先销毁
+      const oldAgent = (window as any).pageAgent;
+      if (oldAgent) {
+        console.log('[Pilot] Disposing old PageAgent instance');
+        try {
+          if (typeof oldAgent.dispose === 'function') {
+            oldAgent.dispose();
+          }
+        } catch (e) {
+          console.warn('[Pilot] Error disposing PageAgent:', e);
+        }
+      }
+
+      // 2. 初始化新实例
+      console.log('[Pilot] Re-initializing PageAgent');
       const baseURL = config.endpoint ? config.endpoint.replace('/chat/completions', '') : 'https://openrouter.ai/api/v1';
       
       try {
@@ -24,11 +53,27 @@ window.addEventListener('message', (event) => {
           baseURL: baseURL,
         });
         console.log('[Pilot] PageAgent initialized successfully');
+        
+        // 发送 PageAgent 就绪信号
+        window.postMessage({
+          source: 'PILOT_MAIN',
+          type: 'PAGE_AGENT_READY'
+        }, '*');
       } catch (e) {
         console.error('[Pilot] Failed to initialize PageAgent:', e);
+        // 即使初始化失败，也发送就绪信号，让流程继续
+        window.postMessage({
+          source: 'PILOT_MAIN',
+          type: 'PAGE_AGENT_READY'
+        }, '*');
       }
     } else {
       console.warn('[Pilot] AI Config received but apiKey is missing. PageAgent will not be initialized.');
+      // 即使没有 API Key，也发送就绪信号，让流程继续
+      window.postMessage({
+        source: 'PILOT_MAIN',
+        type: 'PAGE_AGENT_READY'
+      }, '*');
     }
   }
 });

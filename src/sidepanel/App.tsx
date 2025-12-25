@@ -190,13 +190,13 @@ function RecordingPanel({
                     <Sparkles size={12} />
                     AI Step
                   </button>
-                  <button
-                    onClick={onPause}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-yellow-500 text-white text-xs rounded-lg hover:bg-yellow-600 transition-colors"
-                  >
-                    <Pause size={12} />
-                    暂停
-                  </button>
+                <button
+                  onClick={onPause}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-yellow-500 text-white text-xs rounded-lg hover:bg-yellow-600 transition-colors"
+                >
+                  <Pause size={12} />
+                  暂停
+                </button>
                 </>
               ) : (
                 <button
@@ -284,8 +284,8 @@ function RecordingPanel({
                     onClick={() => startEditing(step)}
                     title={step.type === 'ai_step' ? '点击编辑' : undefined}
                   >
-                    {getStepDescription(step)}
-                  </span>
+                  {getStepDescription(step)}
+                </span>
                 )}
                 
                 <div className="flex items-center gap-0.5 shrink-0">
@@ -298,12 +298,12 @@ function RecordingPanel({
                       <Pencil size={12} />
                     </button>
                   )}
-                  <button
-                    onClick={() => onDeleteStep(step.id)}
+                <button
+                  onClick={() => onDeleteStep(step.id)}
                     className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-                  >
-                    <X size={12} />
-                  </button>
+                >
+                  <X size={12} />
+                </button>
                 </div>
               </div>
             ))}
@@ -471,7 +471,7 @@ function App() {
   const [streamingContent, setStreamingContent] = useState('');
   
   const saveTimeoutRef = useRef<number | null>(null);
-
+  
   // Recording
   const [recordingSession, setRecordingSession] = useState<RecordingSession | null>(null);
   const [recordingContext, setRecordingContext] = useState<string>('');

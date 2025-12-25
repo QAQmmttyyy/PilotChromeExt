@@ -16,31 +16,31 @@
       "assets/index-DIzX96mZ.css"
     ]
   },
-  "_index.ts-loader-C_LX4moM.js": {
-    "file": "assets/index.ts-loader-C_LX4moM.js",
-    "src": "_index.ts-loader-C_LX4moM.js"
+  "_index.ts-loader-TDZOXzDE.js": {
+    "file": "assets/index.ts-loader-TDZOXzDE.js",
+    "src": "_index.ts-loader-TDZOXzDE.js"
   },
-  "_settings-C_x4bTXh.js": {
-    "file": "assets/settings-C_x4bTXh.js",
+  "_settings-Coj1npju.js": {
+    "file": "assets/settings-Coj1npju.js",
     "name": "settings"
   },
   "src/background/index.ts": {
-    "file": "assets/index.ts-CgjHhVaT.js",
+    "file": "assets/index.ts-DX-dgumh.js",
     "name": "index.ts",
     "src": "src/background/index.ts",
     "isEntry": true
   },
   "src/content/index.ts": {
-    "file": "assets/index.ts-Drmrtx0w.js",
+    "file": "assets/index.ts--cH9vvkO.js",
     "name": "index.ts",
     "src": "src/content/index.ts",
     "isEntry": true,
     "imports": [
-      "_settings-C_x4bTXh.js"
+      "_settings-Coj1npju.js"
     ]
   },
   "src/content/main-world.ts": {
-    "file": "assets/main-world.ts-uI6TAnla.js",
+    "file": "assets/main-world.ts-ZWf_sf2g.js",
     "name": "main-world.ts",
     "src": "src/content/main-world.ts",
     "isEntry": true
@@ -55,13 +55,13 @@
     ]
   },
   "src/sidepanel/index.html": {
-    "file": "assets/index.html-DWw8ib3O.js",
+    "file": "assets/index.html-BeJwbhbn.js",
     "name": "index.html",
     "src": "src/sidepanel/index.html",
     "isEntry": true,
     "imports": [
       "_index-DU2K6woN.js",
-      "_settings-C_x4bTXh.js"
+      "_settings-Coj1npju.js"
     ]
   }
 }
