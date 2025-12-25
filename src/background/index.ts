@@ -77,18 +77,29 @@ let activeScriptId: string | null = null;
 // 从存储中恢复所有会话
 let isRestoring = true;
 chrome.storage.local.get(['recordingSessions', 'activeScriptId']).then(res => {
+  console.log('[Pilot BG] Restoring sessions from storage, raw data:', res);
   if (res.recordingSessions && typeof res.recordingSessions === 'object') {
     sessions = res.recordingSessions as Record<string, RecordingSession>;
-    console.log('[Pilot BG] Sessions restored from storage');
+    console.log('[Pilot BG] Sessions restored:', Object.keys(sessions));
+    Object.entries(sessions).forEach(([id, session]) => {
+      console.log(`[Pilot BG] Session ${id}: ${session.steps?.length || 0} steps`);
+    });
+  } else {
+    console.log('[Pilot BG] No sessions found in storage');
   }
   if (res.activeScriptId && typeof res.activeScriptId === 'string') {
     activeScriptId = res.activeScriptId as string;
+    console.log('[Pilot BG] Active script restored:', activeScriptId);
   }
   isRestoring = false;
 });
 
 function saveSessionsToStorage() {
-  chrome.storage.local.set({ recordingSessions: sessions, activeScriptId });
+  chrome.storage.local.set({ recordingSessions: sessions, activeScriptId }).then(() => {
+    console.log('[Pilot BG] Sessions saved to storage:', Object.keys(sessions), 'activeScriptId:', activeScriptId);
+  }).catch(err => {
+    console.error('[Pilot BG] Failed to save sessions:', err);
+  });
 }
 
 function createRecordingSession(tabId: number, url: string, scriptId: string): RecordingSession {
@@ -421,16 +432,22 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   } else if (request.type === 'RECORDING_GET_SESSION') {
     const { scriptId } = request.payload || {};
+    console.log('[Pilot BG] RECORDING_GET_SESSION for scriptId:', scriptId, 'isRestoring:', isRestoring);
+    console.log('[Pilot BG] Current sessions keys:', Object.keys(sessions));
+    
     if (!scriptId) {
       sendResponse({ session: null });
       return;
     }
 
     const sendRes = () => {
-      sendResponse({ session: sessions[scriptId] || null });
+      const session = sessions[scriptId] || null;
+      console.log('[Pilot BG] Returning session for', scriptId, ':', session ? `${session.steps?.length} steps` : 'null');
+      sendResponse({ session });
     };
 
     if (isRestoring) {
+      console.log('[Pilot BG] Still restoring, fetching from storage...');
       chrome.storage.local.get(['recordingSessions']).then(res => {
         if (res.recordingSessions && typeof res.recordingSessions === 'object') {
           sessions = res.recordingSessions as Record<string, RecordingSession>;
