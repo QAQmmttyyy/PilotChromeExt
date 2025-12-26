@@ -5,6 +5,60 @@ console.log('Pilot background script loaded');
 const globalStore: Record<string, any> = {};
 const workflows = new Map<number, WorkflowContext>();
 
+// ============== Step Completion System ==============
+interface StepCompletionResolver {
+  resolve: (type: 'signal' | 'navigation') => void;
+  reject: (reason: string) => void;
+  cleanup: () => void;
+  executingStepIndex: number;
+}
+
+const stepCompletionResolvers = new Map<number, StepCompletionResolver>();
+
+function waitForStepCompletion(tabId: number, executingUrl: string, executingStepIndex: number): Promise<'signal' | 'navigation'> {
+  // 清理旧的 resolver
+  const existing = stepCompletionResolvers.get(tabId);
+  if (existing) {
+    existing.cleanup();
+    existing.reject('Cancelled by new step execution');
+  }
+
+  return new Promise((resolve, reject) => {
+    let resolved = false;
+    
+    const safeResolve = (type: 'signal' | 'navigation') => {
+      if (!resolved) {
+        resolved = true;
+        resolve(type);
+      }
+    };
+    
+    // 监听 URL 变化（MPA 导航场景）
+    const urlChangeListener = (tabIdChanged: number, changeInfo: any) => {
+      if (tabIdChanged === tabId && changeInfo.url && changeInfo.url !== executingUrl) {
+        console.log(`[Pilot Engine] URL changed detected: ${executingUrl} -> ${changeInfo.url}`);
+        safeResolve('navigation');
+      }
+    };
+    
+    chrome.tabs.onUpdated.addListener(urlChangeListener);
+    
+    const cleanup = () => {
+      chrome.tabs.onUpdated.removeListener(urlChangeListener);
+      stepCompletionResolvers.delete(tabId);
+    };
+    
+    stepCompletionResolvers.set(tabId, {
+      resolve: safeResolve,
+      reject,
+      cleanup,
+      executingStepIndex
+    });
+    
+    console.log(`[Pilot Engine] Waiting for step completion: signal or navigation`);
+  });
+}
+
 // ============== Ready Event System ==============
 interface ReadyResolver {
   resolve: () => void;
@@ -526,6 +580,15 @@ function handleBridgeAction(action: string, payload: any, sender: chrome.runtime
           workflow.data = { ...workflow.data, ...payload.data };
         }
         console.log(`[Pilot Engine] Step finished in Tab ${tabId}. Data:`, workflow.data);
+        
+        // 通知 waitForStepCompletion
+        const resolver = stepCompletionResolvers.get(tabId);
+        if (resolver) {
+          resolver.resolve('signal');
+          resolver.cleanup();
+        }
+        
+        // 推进到下一步
         advanceWorkflow(tabId);
       } else {
         console.log(`[Pilot Engine] No running workflow for Tab ${tabId}`);
@@ -534,6 +597,13 @@ function handleBridgeAction(action: string, payload: any, sender: chrome.runtime
     case 'workflowFinish':
       const wf = workflows.get(tabId);
       if (wf) {
+        // 通知 waitForStepCompletion
+        const resolver = stepCompletionResolvers.get(tabId);
+        if (resolver) {
+          resolver.resolve('signal');
+          resolver.cleanup();
+        }
+        
         wf.status = 'completed';
         workflows.delete(tabId);
         console.log(`[Pilot Engine] Workflow finished manually in Tab ${tabId}.`);
@@ -542,6 +612,13 @@ function handleBridgeAction(action: string, payload: any, sender: chrome.runtime
     case 'workflowFail':
       const failedWf = workflows.get(tabId);
       if (failedWf) {
+        // 清理 step completion resolver
+        const resolver = stepCompletionResolvers.get(tabId);
+        if (resolver) {
+          resolver.cleanup();
+          stepCompletionResolvers.delete(tabId);
+        }
+        
         failedWf.status = 'failed';
         workflows.delete(tabId);
         const stepName = failedWf.steps[failedWf.currentStepIndex]?.name || 'Unknown';
@@ -680,24 +757,31 @@ async function executeCurrentStep(tabId: number) {
 
     console.log(`[Pilot Engine] Script injected into Tab ${tabId}`);
 
-    // ===== Phase 5: 检测导航 =====
-    // 短暂延迟后检查 URL 是否变化
-    await new Promise(r => setTimeout(r, 500));
-
-    const afterExecuteTab = await chrome.tabs.get(tabId);
-    const afterExecuteUrl = afterExecuteTab.url;
-
-    if (afterExecuteUrl !== workflow.executingUrl) {
-      console.log(`[Pilot Engine] Navigation detected: ${workflow.executingUrl} -> ${afterExecuteUrl}`);
-
-      // 等待新页面就绪
-      console.log(`[Pilot Engine] Waiting for new page to be ready...`);
+    // ===== Phase 5: 等待步骤完成（事件驱动，无超时） =====
+    const executingStepIndex = currentStepIndex;
+    const executingUrl = workflow.executingUrl!;
+    
+    console.log(`[Pilot Engine] Waiting for step completion...`);
+    
+    const completionType = await waitForStepCompletion(tabId, executingUrl, executingStepIndex);
+    
+    if (completionType === 'navigation') {
+      // MPA 导航：等待新页面就绪后推进
+      console.log(`[Pilot Engine] Navigation detected, waiting for new page ready...`);
       await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
-      console.log(`[Pilot Engine] New page ready, continuing...`);
+      console.log(`[Pilot Engine] New page ready, auto-advancing workflow`);
+      
+      // 再次检查工作流是否已被推进（防止重复推进）
+      const latestWorkflow = workflows.get(tabId);
+      if (latestWorkflow && latestWorkflow.currentStepIndex === executingStepIndex) {
+        advanceWorkflow(tabId);
+      } else {
+        console.log(`[Pilot Engine] Workflow already advanced by signal, skipping navigation-based advance`);
+      }
+    } else {
+      // 'signal': workflow.next/finish 已经调用了 advanceWorkflow，无需额外操作
+      console.log(`[Pilot Engine] Step completed by signal`);
     }
-
-    // ===== Phase 6: 等待工作流信号 =====
-    // 脚本会调用 workflow.next/finish/fail，这些信号会被 handleBridgeAction 处理
 
   } catch (err: any) {
     console.error('[Pilot Engine] Execution failed:', err);
