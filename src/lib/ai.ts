@@ -96,12 +96,13 @@ RECORDING_CONTEXT 是用户录制的操作流程，包含每一步的操作类�
 7. **AI Step 集成**：如果录制中包含 \`ai_step\`（AI 指令），必须生成如下格式的代码：
    \`try {\`
    \`  if (!window.pageAgent?.execute) throw new Error("PageAgent 未就绪");\`
-   \`  await window.pageAgent.execute("用户指令");\`
+   \`  await window.pageAgent.execute(<录制中 AI 指令后的 JSON 字符串字面量>);\`
    \`  window.Pilot.workflow.next();\`
    \`} catch (err) {\`
    \`  if (err.message?.includes('disposed')) return;\`
    \`  window.Pilot.workflow.fail(err.message);\`
    \`}\`
+   - 录制上下文中 AI 指令后的字符串已经是 JSON.stringify 转义后的字面量（如 \`"点击 \\"提交\\" 按钮"\`），直接复制使用即可。
    - 引擎保证就绪后才执行，无需轮询等待。
    - 必须包裹在上述 try-catch 中。
    - disposed 错误通常由页面跳转触发，可忽略。
@@ -214,7 +215,7 @@ function formatRecordedStep(step: RecordedStep, index: number): string {
   
   if (step.value !== undefined) {
     if (step.type === 'ai_step') {
-      lines.push(`- AI 指令: "${step.value}"`);
+      lines.push(`- AI 指令: ${JSON.stringify(step.value)}`);
     } else {
     lines.push(`- 输入值: "${step.value}"`);
     }
