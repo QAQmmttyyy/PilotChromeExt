@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Plus, Trash2, ArrowLeft, Save, Sparkles, Settings, X, MessageSquare, RotateCcw, Brain, Circle, Square, Pause, Mouse, Type, Navigation, Key, List, Pencil } from 'lucide-react';
+import { Play, Plus, Trash2, ArrowLeft, Save, Sparkles, Settings, X, MessageSquare, RotateCcw, Brain, Circle, Square, Pause, Mouse, Type, Navigation, Key, List, Pencil, Zap, FileCode } from 'lucide-react';
 import { Script, storage } from '../lib/storage';
 import { parseScriptToWorkflow } from '../lib/parser';
 import { generateScriptStream, cleanGeneratedCode, buildUserMessage, buildRecordingContext, AVAILABLE_MODELS, ChatMessage, getModelInfo } from '../lib/ai';
 import { settings } from '../lib/settings';
 import { RecordingSession, RecordedStep } from '../lib/types';
+import { Tabs } from '../components/Tabs';
+import { AgentTab } from '../components/AgentTab';
 
 // Seed data
 const SEED_SCRIPT: Script = {
@@ -50,7 +52,6 @@ const SEED_SCRIPT: Script = {
   updatedAt: Date.now()
 };
 
-// 录制步骤图标
 function StepIcon({ type }: { type: RecordedStep['type'] }) {
   switch (type) {
     case 'click':
@@ -72,7 +73,6 @@ function StepIcon({ type }: { type: RecordedStep['type'] }) {
   }
 }
 
-// 录制步骤描述
 function getStepDescription(step: RecordedStep): string {
   switch (step.type) {
     case 'click':
@@ -94,7 +94,6 @@ function getStepDescription(step: RecordedStep): string {
   }
 }
 
-// 录制面板组件
 function RecordingPanel({ 
   session, 
   onStart, 
@@ -338,7 +337,6 @@ function RecordingPanel({
   );
 }
 
-// 设置面板
 function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [apiKey, setApiKey] = useState('');
   const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id);
@@ -360,7 +358,6 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  // 按 provider 分组
   const groupedModels = AVAILABLE_MODELS.reduce((acc, model) => {
     if (!acc[model.provider]) acc[model.provider] = [];
     acc[model.provider].push(model);
@@ -452,16 +449,23 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-function App() {
+// Scripts Tab Content
+function ScriptsTabContent({ 
+  onOpenSettings, 
+  showSettings,
+  onCloseSettings 
+}: { 
+  onOpenSettings: () => void;
+  showSettings: boolean;
+  onCloseSettings: () => void;
+}) {
   const [view, setView] = useState<'list' | 'editor'>('list');
   const [scripts, setScripts] = useState<Script[]>([]);
   const [currentScript, setCurrentScript] = useState<Script | null>(null);
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
   
-  // 多轮对话
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [showChat, setShowChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -472,7 +476,6 @@ function App() {
   
   const saveTimeoutRef = useRef<number | null>(null);
   
-  // Recording
   const [recordingSession, setRecordingSession] = useState<RecordingSession | null>(null);
   const [recordingContext, setRecordingContext] = useState<string>('');
 
@@ -480,10 +483,8 @@ function App() {
     loadScripts();
     checkApiKey();
     
-    // 监听录制更新
     const handleMessage = (message: any) => {
       if (message.type === 'RECORDING_SESSION_UPDATE') {
-        // 只有当消息中的 scriptId 与当前编辑的脚本 ID 一致时才更新
         if (currentScript && message.scriptId === currentScript.id) {
           setRecordingSession(message.payload);
         }
@@ -493,7 +494,6 @@ function App() {
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, [currentScript?.id]);
 
-  // 当切换脚本时加载对应的录制会话
   useEffect(() => {
     if (currentScript) {
       loadRecordingSession(currentScript.id);
@@ -715,7 +715,6 @@ function App() {
     }
   };
 
-  // 自动保存逻辑
   useEffect(() => {
     if (view === 'editor' && currentScript && !isGenerating) {
       if (saveTimeoutRef.current) {
@@ -724,7 +723,7 @@ function App() {
       
       saveTimeoutRef.current = window.setTimeout(() => {
         handleSave();
-      }, 1000); // 1秒延迟
+      }, 1000);
     }
     
     return () => {
@@ -764,15 +763,13 @@ function App() {
 
     const config = await settings.getAIConfig();
     if (!config.apiKey) {
-      setShowSettings(true);
+      onOpenSettings();
       return;
     }
 
-    // 构建用户消息（使用录制上下文）
     const userMessage = buildUserMessage(aiPrompt, recordingContext);
     const newUserMsg: ChatMessage = { role: 'user', content: aiPrompt };
     
-    // 添加到历史
     const updatedHistory = [...chatHistory, newUserMsg];
     setChatHistory(updatedHistory);
     setShowChat(true);
@@ -783,7 +780,6 @@ function App() {
     let generatedCode = '';
 
     try {
-      // 构建完整的消息历史（包含页面上下文的第一条消息）
       const messagesForApi: ChatMessage[] = updatedHistory.map((msg, idx) => {
         if (msg.role === 'user' && idx === updatedHistory.length - 1) {
           return { role: 'user', content: userMessage };
@@ -791,13 +787,11 @@ function App() {
         return msg;
       });
 
-      // 流式接收时只更新 streamingContent，不修改代码编辑器
       for await (const chunk of generateScriptStream(messagesForApi, config)) {
         generatedCode += chunk;
         setStreamingContent(generatedCode);
       }
 
-      // AI 响应完成后，提取完整代码并更新到编辑器
       const cleanedCode = cleanGeneratedCode(generatedCode);
       if (currentScript && cleanedCode) {
         setCurrentScript({
@@ -808,7 +802,6 @@ function App() {
         setTimeout(() => setCodeUpdateStatus('idle'), 2000);
       }
 
-      // 添加助手回复到历史
       const assistantMsg: ChatMessage = { role: 'assistant', content: generatedCode };
       setChatHistory([...updatedHistory, assistantMsg]);
       
@@ -816,7 +809,6 @@ function App() {
       setStreamingContent('');
     } catch (err: any) {
       console.error('AI generation failed:', err);
-      // 添加错误消息
       const errorMsg: ChatMessage = { role: 'assistant', content: `❌ 错误: ${err.message}` };
       setChatHistory([...updatedHistory, errorMsg]);
       setStreamingContent('');
@@ -829,13 +821,12 @@ function App() {
     setChatHistory([]);
   };
 
-  // 编辑器视图
   if (view === 'editor' && currentScript) {
     return (
-      <div className="h-screen w-full bg-slate-50 flex flex-col">
-        {showSettings && <SettingsPanel onClose={() => { setShowSettings(false); checkApiKey(); }} />}
+      <div className="h-full flex flex-col">
+        {showSettings && <SettingsPanel onClose={onCloseSettings} />}
         
-        <header className="p-3 bg-white border-b border-slate-200 flex justify-between items-center sticky top-0 z-10">
+        <header className="p-3 bg-white border-b border-slate-200 flex justify-between items-center">
           <div className="flex items-center gap-2">
             <button onClick={() => { loadScripts(); setView('list'); }} className="p-1.5 hover:bg-slate-100 rounded-lg">
               <ArrowLeft size={18} />
@@ -848,7 +839,7 @@ function App() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => setShowSettings(true)}
+              onClick={onOpenSettings}
               className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
               title="设置"
             >
@@ -880,9 +871,8 @@ function App() {
           </div>
         </header>
 
-        <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden">
-          {/* 代码编辑器 */}
-          <div className="flex-1 border border-slate-200 rounded-xl overflow-hidden flex flex-col bg-white shadow-sm min-h-0">
+        <div className="flex-1 flex flex-col p-3 gap-3 overflow-y-auto">
+          <div className="flex-1 border border-slate-200 rounded-xl overflow-hidden flex flex-col bg-white shadow-sm min-h-[200px]">
             <div className="bg-slate-50 px-4 py-2 text-xs text-slate-500 border-b border-slate-200 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <span className="font-medium">代码编辑器</span>
@@ -908,7 +898,6 @@ function App() {
             />
           </div>
 
-          {/* 对话历史 */}
           {showChat && (chatHistory.length > 0 || streamingContent) && (
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm max-h-48 overflow-hidden flex flex-col">
               <div className="px-3 py-2 border-b border-slate-100 flex justify-between items-center bg-slate-50">
@@ -937,7 +926,6 @@ function App() {
                     <div className="line-clamp-2">{msg.content.slice(0, 100)}{msg.content.length > 100 ? '...' : ''}</div>
                   </div>
                 ))}
-                {/* 流式输出显示 */}
                 {streamingContent && (
                   <div className="text-xs p-2 rounded-lg bg-purple-50 text-purple-800 mr-4 border border-purple-200">
                     <div className="font-medium mb-0.5 flex items-center gap-1">
@@ -954,7 +942,6 @@ function App() {
             </div>
           )}
 
-          {/* 录制面板 */}
           <RecordingPanel
             session={recordingSession}
             onStart={handleStartRecording}
@@ -968,7 +955,6 @@ function App() {
             onAddAiStep={handleAddAiStep}
           />
 
-          {/* AI 助手 */}
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
@@ -980,7 +966,6 @@ function App() {
               )}
             </div>
 
-            {/* 录制上下文显示 */}
             {recordingContext && (
               <div className="text-xs bg-slate-50 p-2 rounded-lg max-h-20 overflow-auto">
                 <div className="flex items-center gap-1 text-purple-600 mb-1">
@@ -1034,31 +1019,12 @@ function App() {
     );
   }
 
-  // 列表视图
+  // List view
   return (
-    <div className="h-screen w-full bg-slate-50 flex flex-col">
-      {showSettings && <SettingsPanel onClose={() => { setShowSettings(false); checkApiKey(); }} />}
+    <div className="h-full flex flex-col">
+      {showSettings && <SettingsPanel onClose={onCloseSettings} />}
 
-      <header className="p-4 bg-white border-b border-slate-200 flex justify-between items-center sticky top-0 z-10">
-        <h1 className="text-lg font-bold text-slate-800">Pilot</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowSettings(true)}
-            className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
-            title="设置"
-          >
-            <Settings size={20} />
-          </button>
-          <button
-            onClick={handleCreateNew}
-            className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Plus size={20} />
-          </button>
-        </div>
-      </header>
-
-      <main className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {!hasApiKey && (
           <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4 text-sm">
             <div className="flex items-center gap-2 font-semibold text-purple-800 mb-1">
@@ -1070,6 +1036,14 @@ function App() {
             </p>
           </div>
         )}
+
+        <button
+          onClick={handleCreateNew}
+          className="w-full p-4 border-2 border-dashed border-slate-300 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 text-slate-500 hover:text-blue-600"
+        >
+          <Plus size={20} />
+          <span className="font-medium">创建新脚本</span>
+        </button>
 
         {scripts.map(script => (
           <div
@@ -1100,7 +1074,63 @@ function App() {
             </div>
           </div>
         ))}
-      </main>
+      </div>
+    </div>
+  );
+}
+
+// Main App with Tabs
+function App() {
+  const [activeTab, setActiveTab] = useState<'agent' | 'scripts'>('agent');
+  const [showSettings, setShowSettings] = useState(false);
+
+  const tabs = [
+    { id: 'agent', label: 'Agent', icon: <Zap size={14} /> },
+    { id: 'scripts', label: 'Scripts', icon: <FileCode size={14} /> },
+  ];
+
+  const handleOpenSettings = () => setShowSettings(true);
+  const handleCloseSettings = () => setShowSettings(false);
+
+  return (
+    <div className="h-screen w-full bg-slate-50 flex flex-col">
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200 flex justify-between items-center px-4 py-2">
+        <h1 className="text-lg font-bold text-slate-800">Pilot</h1>
+        <button
+          onClick={handleOpenSettings}
+          className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
+          title="设置"
+        >
+          <Settings size={18} />
+        </button>
+      </header>
+
+      {/* Tabs */}
+      <Tabs 
+        tabs={tabs} 
+        activeTab={activeTab} 
+        onChange={(id) => setActiveTab(id as 'agent' | 'scripts')} 
+      />
+
+      {/* Tab Content */}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'agent' && (
+          <AgentTab onOpenSettings={handleOpenSettings} />
+        )}
+        {activeTab === 'scripts' && (
+          <ScriptsTabContent 
+            onOpenSettings={handleOpenSettings}
+            showSettings={showSettings}
+            onCloseSettings={handleCloseSettings}
+          />
+        )}
+      </div>
+
+      {/* Global Settings Modal (for Agent tab) */}
+      {showSettings && activeTab === 'agent' && (
+        <SettingsPanel onClose={handleCloseSettings} />
+      )}
     </div>
   );
 }

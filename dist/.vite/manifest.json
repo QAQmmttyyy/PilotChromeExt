@@ -5,23 +5,31 @@
     "src": "../../../../@crx/manifest",
     "isEntry": true
   },
-  "_index-DIzX96mZ.css": {
-    "file": "assets/index-DIzX96mZ.css",
-    "src": "_index-DIzX96mZ.css"
+  "_coerce-DkLxnau5.js": {
+    "file": "assets/coerce-DkLxnau5.js",
+    "name": "coerce"
   },
-  "_index-DU2K6woN.js": {
-    "file": "assets/index-DU2K6woN.js",
+  "_index-D-5eSZcd.css": {
+    "file": "assets/index-D-5eSZcd.css",
+    "src": "_index-D-5eSZcd.css"
+  },
+  "_index-ssJt6nYv.js": {
+    "file": "assets/index-ssJt6nYv.js",
     "name": "index",
     "css": [
-      "assets/index-DIzX96mZ.css"
+      "assets/index-D-5eSZcd.css"
     ]
   },
-  "_index.ts-loader-TDZOXzDE.js": {
-    "file": "assets/index.ts-loader-TDZOXzDE.js",
-    "src": "_index.ts-loader-TDZOXzDE.js"
+  "_index.ts-loader-DWX-wJbM.js": {
+    "file": "assets/index.ts-loader-DWX-wJbM.js",
+    "src": "_index.ts-loader-DWX-wJbM.js"
   },
-  "_settings-Coj1npju.js": {
-    "file": "assets/settings-Coj1npju.js",
+  "_main-world.ts-loader-Bl6jTmg2.js": {
+    "file": "assets/main-world.ts-loader-Bl6jTmg2.js",
+    "src": "_main-world.ts-loader-Bl6jTmg2.js"
+  },
+  "_settings-DkJnF7oq.js": {
+    "file": "assets/settings-DkJnF7oq.js",
     "name": "settings"
   },
   "src/background/index.ts": {
@@ -31,37 +39,41 @@
     "isEntry": true
   },
   "src/content/index.ts": {
-    "file": "assets/index.ts--cH9vvkO.js",
+    "file": "assets/index.ts-BRvcrwnH.js",
     "name": "index.ts",
     "src": "src/content/index.ts",
     "isEntry": true,
     "imports": [
-      "_settings-Coj1npju.js"
+      "_settings-DkJnF7oq.js"
     ]
   },
   "src/content/main-world.ts": {
-    "file": "assets/main-world.ts-ZWf_sf2g.js",
+    "file": "assets/main-world.ts-Cupkw6BA.js",
     "name": "main-world.ts",
     "src": "src/content/main-world.ts",
-    "isEntry": true
+    "isEntry": true,
+    "imports": [
+      "_coerce-DkLxnau5.js"
+    ]
   },
   "src/popup/index.html": {
-    "file": "assets/index.html-DnbAT8kq.js",
+    "file": "assets/index.html-gm0aMR7u.js",
     "name": "index.html",
     "src": "src/popup/index.html",
     "isEntry": true,
     "imports": [
-      "_index-DU2K6woN.js"
+      "_index-ssJt6nYv.js"
     ]
   },
   "src/sidepanel/index.html": {
-    "file": "assets/index.html-BeJwbhbn.js",
+    "file": "assets/index.html-BJRQIcbx.js",
     "name": "index.html",
     "src": "src/sidepanel/index.html",
     "isEntry": true,
     "imports": [
-      "_index-DU2K6woN.js",
-      "_settings-Coj1npju.js"
+      "_index-ssJt6nYv.js",
+      "_settings-DkJnF7oq.js",
+      "_coerce-DkLxnau5.js"
     ]
   }
 }

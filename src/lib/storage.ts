@@ -1,8 +1,11 @@
+import { RecordedStep } from './types';
+
 export interface Script {
   id: string;
   name: string;
   description: string;
   code: string;
+  steps?: RecordedStep[];
   createdAt: number;
   updatedAt: number;
 }
