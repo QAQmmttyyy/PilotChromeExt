@@ -15,9 +15,7 @@
   "host_permissions": [
     "<all_urls>"
   ],
-  "action": {
-    "default_popup": "src/popup/index.html"
-  },
+  "action": {},
   "background": {
     "service_worker": "src/background/index.ts",
     "type": "module"

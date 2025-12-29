@@ -2,6 +2,13 @@ import { WorkflowContext, WorkflowStep, RecordingSession, RecordedStep, Recordin
 
 console.log('Pilot background script loaded');
 
+// 点击扩展图标时打开 sidepanel
+chrome.action.onClicked.addListener((tab) => {
+  if (tab.windowId) {
+    chrome.sidePanel.open({ windowId: tab.windowId });
+  }
+});
+
 // ============== Page Injection Utilities ==============
 function isInjectablePage(url: string | undefined): boolean {
   if (!url) return false;
