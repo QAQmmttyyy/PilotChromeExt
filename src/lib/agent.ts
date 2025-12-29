@@ -58,22 +58,16 @@ const STEPS_SYSTEM_PROMPT = `你是一个浏览器自动化任务分解专家。
 - url: 导航目标 URL（navigate 类型必填）
 - value: 操作指令描述（ai_step 类型必填）
 
-## 示例
-用户：打开百度搜索 "AI"，然后点击第一个结果
-
-输出：
-[
-  { "type": "navigate", "url": "https://www.baidu.com" },
-  { "type": "ai_step", "value": "在搜索框中输入 'AI'" },
-  { "type": "ai_step", "value": "点击搜索按钮" },
-  { "type": "ai_step", "value": "点击第一个搜索结果链接" }
-]
-
 ## 重要规则
-1. 每个 ai_step 应该是一个原子操作（单一动作）
-2. 如果用户未指定起始 URL，根据任务推断合理的起始页面
-3. 操作指令要清晰、具体，包含目标元素的描述
-4. 不要返回任何解释，只返回 JSON 数组`;
+1. **按页面划分步骤**：同一页面内的多个操作应合并为一个 ai_step，不要拆太细
+   - page-agent 可以在一次 execute 中完成多个同页面操作
+   - 只有当操作会触发页面跳转时，才需要拆分为新步骤
+2. **单页约束**：一个 ai_step 执行中不能触发页面导航
+   - 如果某操作会导致页面跳转（如点击链接），应作为当前页面的最后一个操作
+   - 跳转后的操作必须是新步骤
+3. 如果用户未指定起始 URL，根据任务推断合理的起始页面
+4. 操作指令要清晰、具体
+5. 不要返回任何解释，只返回 JSON 数组`;
 
 // 脚本生成的 system prompt（复用 ai.ts 的核心逻辑）
 const SCRIPT_SYSTEM_PROMPT = `你是一个浏览器自动化脚本生成专家。根据提供的步骤序列生成可执行的 JavaScript 代码。
@@ -115,42 +109,25 @@ const SCRIPT_SYSTEM_PROMPT = `你是一个浏览器自动化脚本生成专家�
 
 6. **最后一步**使用 \`finish()\` 而不是 \`next()\`
 
-## 示例输入
-[
-  { "type": "navigate", "url": "https://www.baidu.com" },
-  { "type": "ai_step", "value": "在搜索框中输入 'AI'" },
-  { "type": "ai_step", "value": "点击搜索按钮" }
-]
-
-## 示例输出
-// === STEP: 打开百度 (https://www.baidu.com) ===
-(async () => {
-  window.Pilot.workflow.next();
-})();
-
-// === STEP: 输入搜索关键词 ===
-(async () => {
-  try {
-    if (!window.pageAgent?.execute) throw new Error("PageAgent 未就绪");
-    await window.pageAgent.execute("在搜索框中输入 'AI'");
-    window.Pilot.workflow.next();
-  } catch (err) {
-    if (err.message?.includes('disposed')) return;
-    window.Pilot.workflow.fail(err.message);
-  }
-})();
-
-// === STEP: 点击搜索 ===
-(async () => {
-  try {
-    if (!window.pageAgent?.execute) throw new Error("PageAgent 未就绪");
-    await window.pageAgent.execute("点击搜索按钮");
-    window.Pilot.workflow.finish();
-  } catch (err) {
-    if (err.message?.includes('disposed')) return;
-    window.Pilot.workflow.fail(err.message);
-  }
-})();`;
+7. **跨步骤数据传递**：
+   - \`pageAgent.execute()\` 返回 \`{ success, data, history }\`
+   - **必须检查 success**：如果 false，data 是错误信息，应调用 fail
+   - 传递数据给下一步：\`window.Pilot.workflow.next({ key: value })\`
+   - 读取上一步传递的数据：\`window.PilotData.key\`
+   
+   **示例：提取数据并传递**
+   \`\`\`
+   const result = await window.pageAgent.execute("获取页面标题");
+   if (!result.success) return window.Pilot.workflow.fail(result.data);
+   window.Pilot.workflow.next({ pageTitle: result.data });
+   \`\`\`
+   
+   **示例：使用上一步的数据**
+   \`\`\`
+   const title = window.PilotData?.pageTitle || '';
+   await window.pageAgent.execute(\`在搜索框中输入标题\n\n[数据]\n标题: \${title}\`);
+   window.Pilot.workflow.next();
+   \`\`\``;
 
 // Step schema for validation
 const StepSchema = z.object({

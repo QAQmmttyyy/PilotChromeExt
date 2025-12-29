@@ -92,22 +92,16 @@ ${a}:`]}}function Iy({id:t,model:a,created:o}){return{id:t??void 0,modelId:a??vo
 - url: 导航目标 URL（navigate 类型必填）
 - value: 操作指令描述（ai_step 类型必填）
 
-## 示例
-用户：打开百度搜索 "AI"，然后点击第一个结果
-
-输出：
-[
-  { "type": "navigate", "url": "https://www.baidu.com" },
-  { "type": "ai_step", "value": "在搜索框中输入 'AI'" },
-  { "type": "ai_step", "value": "点击搜索按钮" },
-  { "type": "ai_step", "value": "点击第一个搜索结果链接" }
-]
-
 ## 重要规则
-1. 每个 ai_step 应该是一个原子操作（单一动作）
-2. 如果用户未指定起始 URL，根据任务推断合理的起始页面
-3. 操作指令要清晰、具体，包含目标元素的描述
-4. 不要返回任何解释，只返回 JSON 数组`,PC=`你是一个浏览器自动化脚本生成专家。根据提供的步骤序列生成可执行的 JavaScript 代码。
+1. **按页面划分步骤**：同一页面内的多个操作应合并为一个 ai_step，不要拆太细
+   - page-agent 可以在一次 execute 中完成多个同页面操作
+   - 只有当操作会触发页面跳转时，才需要拆分为新步骤
+2. **单页约束**：一个 ai_step 执行中不能触发页面导航
+   - 如果某操作会导致页面跳转（如点击链接），应作为当前页面的最后一个操作
+   - 跳转后的操作必须是新步骤
+3. 如果用户未指定起始 URL，根据任务推断合理的起始页面
+4. 操作指令要清晰、具体
+5. 不要返回任何解释，只返回 JSON 数组`,PC=`你是一个浏览器自动化脚本生成专家。根据提供的步骤序列生成可执行的 JavaScript 代码。
 
 ## 输入格式
 你会收到一个步骤数组，每个步骤包含：
@@ -146,42 +140,27 @@ ${a}:`]}}function Iy({id:t,model:a,created:o}){return{id:t??void 0,modelId:a??vo
 
 6. **最后一步**使用 \`finish()\` 而不是 \`next()\`
 
-## 示例输入
-[
-  { "type": "navigate", "url": "https://www.baidu.com" },
-  { "type": "ai_step", "value": "在搜索框中输入 'AI'" },
-  { "type": "ai_step", "value": "点击搜索按钮" }
-]
+7. **跨步骤数据传递**：
+   - \`pageAgent.execute()\` 返回 \`{ success, data, history }\`，\`data\` 是提取的数据（字符串）
+   - 传递数据给下一步：\`window.Pilot.workflow.next({ key: value })\`
+   - 读取上一步传递的数据：\`window.PilotData.key\`
+   
+   **示例：提取数据并传递**
+   \`\`\`
+   const result = await window.pageAgent.execute("获取页面标题");
+   window.Pilot.workflow.next({ pageTitle: result.data });
+   \`\`\`
+   
+   **示例：使用上一步的数据**
+   \`\`\`
+   // 将数据作为上下文 block 拼接到指令中，pageAgent 内部 AI 会理解
+   const title = window.PilotData?.pageTitle || '';
+   await window.pageAgent.execute(\`在搜索框中输入上一步获取的标题
 
-## 示例输出
-// === STEP: 打开百度 (https://www.baidu.com) ===
-(async () => {
-  window.Pilot.workflow.next();
-})();
-
-// === STEP: 输入搜索关键词 ===
-(async () => {
-  try {
-    if (!window.pageAgent?.execute) throw new Error("PageAgent 未就绪");
-    await window.pageAgent.execute("在搜索框中输入 'AI'");
-    window.Pilot.workflow.next();
-  } catch (err) {
-    if (err.message?.includes('disposed')) return;
-    window.Pilot.workflow.fail(err.message);
-  }
-})();
-
-// === STEP: 点击搜索 ===
-(async () => {
-  try {
-    if (!window.pageAgent?.execute) throw new Error("PageAgent 未就绪");
-    await window.pageAgent.execute("点击搜索按钮");
-    window.Pilot.workflow.finish();
-  } catch (err) {
-    if (err.message?.includes('disposed')) return;
-    window.Pilot.workflow.fail(err.message);
-  }
-})();`,FC=S({type:Ve(["navigate","ai_step"]),url:y().optional(),value:y().optional()}),WC=oe(FC);class ek{config;state;onStateChange;constructor(a,o){this.config=a,this.onStateChange=o,this.state={status:"idle",steps:[],script:"",toolCalls:[]}}updateState(a){this.state={...this.state,...a},this.onStateChange?.(this.state)}logToolCall(a,o,r){const s={name:a,args:o,result:r,timestamp:Date.now()};this.updateState({toolCalls:[...this.state.toolCalls,s]})}getState(){return this.state}async run(a){this.updateState({status:"thinking",steps:[],script:"",error:void 0,toolCalls:[]});const o=QC(this.config);try{this.updateState({status:"generating_steps"});const r=await this.generateSteps(o,a);this.updateState({steps:r}),this.updateState({status:"generating_script"});const s=await this.generateScript(o,r);return this.updateState({script:s}),this.updateState({status:"completed"}),this.state}catch(r){const s=r instanceof Error?r.message:String(r);throw this.updateState({status:"error",error:s}),r}}async generateSteps(a,o){const{text:r}=await Cy({model:a(this.config.model),system:KC,prompt:o});this.logToolCall("generate_steps",{userPrompt:o},r);const s=r.match(/\[[\s\S]*\]/);if(!s)throw new Error("AI 未返回有效的步骤 JSON");const c=JSON.parse(s[0]);return WC.parse(c).map((p,h)=>({id:`step-${h+1}`,timestamp:Date.now(),type:p.type,url:p.url||"",pageTitle:p.type==="navigate"?`导航到 ${p.url}`:p.value||"",value:p.value}))}async generateScript(a,o){const r=JSON.stringify(o.map(c=>({type:c.type,url:c.url||void 0,value:c.value||void 0})),null,2),{text:s}=await Cy({model:a(this.config.model),system:PC,prompt:`请根据以下步骤生成脚本：
+[数据]
+标题: \${title}\`);
+   window.Pilot.workflow.next();
+   \`\`\``,FC=S({type:Ve(["navigate","ai_step"]),url:y().optional(),value:y().optional()}),WC=oe(FC);class ek{config;state;onStateChange;constructor(a,o){this.config=a,this.onStateChange=o,this.state={status:"idle",steps:[],script:"",toolCalls:[]}}updateState(a){this.state={...this.state,...a},this.onStateChange?.(this.state)}logToolCall(a,o,r){const s={name:a,args:o,result:r,timestamp:Date.now()};this.updateState({toolCalls:[...this.state.toolCalls,s]})}getState(){return this.state}async run(a){this.updateState({status:"thinking",steps:[],script:"",error:void 0,toolCalls:[]});const o=QC(this.config);try{this.updateState({status:"generating_steps"});const r=await this.generateSteps(o,a);this.updateState({steps:r}),this.updateState({status:"generating_script"});const s=await this.generateScript(o,r);return this.updateState({script:s}),this.updateState({status:"completed"}),this.state}catch(r){const s=r instanceof Error?r.message:String(r);throw this.updateState({status:"error",error:s}),r}}async generateSteps(a,o){const{text:r}=await Cy({model:a(this.config.model),system:KC,prompt:o});this.logToolCall("generate_steps",{userPrompt:o},r);const s=r.match(/\[[\s\S]*\]/);if(!s)throw new Error("AI 未返回有效的步骤 JSON");const c=JSON.parse(s[0]);return WC.parse(c).map((p,h)=>({id:`step-${h+1}`,timestamp:Date.now(),type:p.type,url:p.url||"",pageTitle:p.type==="navigate"?`导航到 ${p.url}`:p.value||"",value:p.value}))}async generateScript(a,o){const r=JSON.stringify(o.map(c=>({type:c.type,url:c.url||void 0,value:c.value||void 0})),null,2),{text:s}=await Cy({model:a(this.config.model),system:PC,prompt:`请根据以下步骤生成脚本：
 
 ${r}`});return this.logToolCall("generate_script",{steps:r},s),Xy(s)}async executeScript(a){if(!this.state.script)throw new Error("没有可执行的脚本");this.updateState({status:"running"});const o=bd(this.state.script);await chrome.runtime.sendMessage({type:"START_WORKFLOW",payload:{steps:o,tabId:a}}),this.logToolCall("run_workflow",{tabId:a,stepsCount:o.length})}}function tk(t,a){return new ek(t,a)}const po="agentTasks",nk=50,Ei={async getTasks(){return(await chrome.storage.local.get(po))[po]||[]},async saveTask(t){const a=await this.getTasks(),o=a.findIndex(s=>s.id===t.id);o>=0?a[o]=t:a.unshift(t);const r=a.slice(0,nk);await chrome.storage.local.set({[po]:r})},async deleteTask(t){const o=(await this.getTasks()).filter(r=>r.id!==t);await chrome.storage.local.set({[po]:o})},async updateExecutedAt(t){const a=await this.getTasks(),o=a.find(r=>r.id===t);o&&(o.executedAt=Date.now(),await chrome.storage.local.set({[po]:a}))},async clearAll(){await chrome.storage.local.remove(po)}};function ak({type:t}){return t==="navigate"?_.jsx(ng,{size:14,className:"text-blue-500"}):_.jsx(ma,{size:14,className:"text-purple-500"})}function lk({status:t}){const a={idle:{label:"就绪",color:"bg-slate-100 text-slate-600"},thinking:{label:"思考中",color:"bg-yellow-100 text-yellow-700",icon:_.jsx(mo,{size:12,className:"animate-spin"})},generating_steps:{label:"生成步骤",color:"bg-blue-100 text-blue-700",icon:_.jsx(mo,{size:12,className:"animate-spin"})},generating_script:{label:"生成脚本",color:"bg-purple-100 text-purple-700",icon:_.jsx(mo,{size:12,className:"animate-spin"})},running:{label:"执行中",color:"bg-green-100 text-green-700",icon:_.jsx(mo,{size:12,className:"animate-spin"})},completed:{label:"完成",color:"bg-emerald-100 text-emerald-700",icon:_.jsx(VS,{size:12})},error:{label:"错误",color:"bg-red-100 text-red-700",icon:_.jsx(tg,{size:12})}},{label:o,color:r,icon:s}=a[t];return _.jsxs("span",{className:`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${r}`,children:[s,o]})}function lb({steps:t,compact:a=!1}){return t.length===0?null:_.jsx("div",{className:a?"space-y-0.5":"space-y-1",children:t.map((o,r)=>_.jsxs("div",{className:`flex items-start gap-2 ${a?"py-1":"p-2 bg-slate-50 rounded-lg"} text-sm`,children:[_.jsxs("span",{className:"text-slate-400 w-5 text-right shrink-0",children:[r+1,"."]}),_.jsx(ak,{type:o.type}),_.jsx("span",{className:"text-slate-700 flex-1 text-xs",children:o.type==="navigate"?_.jsx("span",{className:"font-mono text-blue-600 break-all",children:o.url}):o.value})]},o.id))})}function ob({script:t}){const[a,o]=xe.useState(!1);return t?_.jsxs("div",{className:"border border-slate-200 rounded-lg overflow-hidden",children:[_.jsxs("button",{onClick:()=>o(!a),className:"w-full flex items-center gap-2 px-3 py-2 bg-slate-50 text-sm font-medium text-slate-700 hover:bg-slate-100",children:[a?_.jsx(Wy,{size:14}):_.jsx(eg,{size:14}),_.jsx(KS,{size:14}),"生成的脚本"]}),a&&_.jsx("pre",{className:"p-3 text-xs font-mono bg-slate-900 text-slate-100 overflow-x-auto max-h-64",children:t})]}):null}function ok(t){const a=Math.floor((Date.now()-t)/1e3);if(a<60)return"刚刚";const o=Math.floor(a/60);if(o<60)return`${o}分钟前`;const r=Math.floor(o/60);return r<24?`${r}小时前`:`${Math.floor(r/24)}天前`}function ik({task:t,onExecute:a,onSaveAsScript:o,onDelete:r}){const[s,c]=xe.useState(!1);return _.jsxs("div",{className:"border border-slate-200 rounded-lg overflow-hidden bg-white",children:[_.jsxs("div",{className:"flex items-start gap-2 p-3 cursor-pointer hover:bg-slate-50",onClick:()=>c(!s),children:[_.jsx("div",{className:"shrink-0 pt-0.5",children:s?_.jsx(Wy,{size:14,className:"text-slate-400"}):_.jsx(eg,{size:14,className:"text-slate-400"})}),_.jsxs("div",{className:"flex-1 min-w-0",children:[_.jsx("div",{className:"text-sm text-slate-700 line-clamp-2",children:t.prompt}),_.jsxs("div",{className:"flex items-center gap-2 mt-1 text-xs text-slate-400",children:[_.jsxs("span",{children:[t.steps.length," 步骤"]}),_.jsx("span",{children:"·"}),_.jsxs("span",{className:"flex items-center gap-1",children:[_.jsx(XS,{size:10}),ok(t.createdAt)]}),t.executedAt&&_.jsxs(_.Fragment,{children:[_.jsx("span",{children:"·"}),_.jsx("span",{className:"text-green-600",children:"已执行"})]})]})]}),_.jsxs("div",{className:"flex items-center gap-1 shrink-0",onClick:f=>f.stopPropagation(),children:[_.jsx("button",{onClick:a,className:"p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded",title:"执行",children:_.jsx(So,{size:14})}),_.jsx("button",{onClick:o,className:"p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded",title:"保存为脚本",children:_.jsx(ag,{size:14})}),_.jsx("button",{onClick:r,className:"p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded",title:"删除",children:_.jsx(_d,{size:14})})]})]}),s&&_.jsxs("div",{className:"border-t border-slate-100 p-3 space-y-3 bg-slate-50",children:[_.jsx(lb,{steps:t.steps,compact:!0}),_.jsx(ob,{script:t.script})]})]})}function rk({onOpenSettings:t}){const[a,o]=xe.useState(""),[r,s]=xe.useState({status:"idle",steps:[],script:"",toolCalls:[]}),[c,f]=xe.useState(!1),[p,h]=xe.useState(Ni[0]),[v,b]=xe.useState([]),[E,N]=xe.useState(null),[j,V]=xe.useState(!1),[I,$]=xe.useState(null),se=xe.useRef(null),de=xe.useRef(null);xe.useEffect(()=>{K(),re();const X=Y=>{if(Y.type==="WORKFLOW_STATUS_UPDATE"){const{status:ne,error:fe}=Y.payload;V(!1),ne==="failed"&&fe?$(fe):ne==="completed"&&$(null)}};return chrome.runtime.onMessage.addListener(X),()=>chrome.runtime.onMessage.removeListener(X)},[]);const K=async()=>{const X=await Va.hasApiKey();f(X);const Y=await Va.getAIConfig(),ne=Qy(Y.model);ne&&h(ne)},re=async()=>{const X=await Ei.getTasks();b(X)},D=async()=>{if(!a.trim())return;const X=await Va.getAIConfig();if(!X.apiKey){t();return}const Y=crypto.randomUUID();N(Y);const ne=tk({apiKey:X.apiKey,model:X.model},s);se.current=ne;try{const fe=await ne.run(a.trim()),W={id:Y,prompt:a.trim(),steps:fe.steps,script:fe.script,status:"completed",createdAt:Date.now()};await Ei.saveTask(W),await re(),o("")}catch(fe){console.error("Agent error:",fe);const W={id:Y,prompt:a.trim(),steps:r.steps,script:r.script,status:"failed",createdAt:Date.now()};await Ei.saveTask(W),await re()}},G=async X=>{const Y=X?.script||r.script,ne=X?.id||E;if(!Y){alert("没有可执行的脚本");return}const[fe]=await chrome.tabs.query({active:!0,currentWindow:!0});if(!fe.id){alert("无法获取当前标签页");return}V(!0),$(null);try{const W=bd(Y);await chrome.runtime.sendMessage({type:"START_WORKFLOW",payload:{steps:W,tabId:fe.id}}),ne&&(await Ei.updateExecutedAt(ne),await re())}catch(W){console.error("Execute error:",W),V(!1),$(W instanceof Error?W.message:String(W))}},ie=async X=>{const Y={id:crypto.randomUUID(),name:X.prompt.slice(0,30)+(X.prompt.length>30?"...":""),description:`由 Agent 生成：${X.prompt}`,code:X.script,steps:X.steps,createdAt:Date.now(),updatedAt:Date.now()};await La.saveScript(Y),alert("已保存到脚本列表")},Re=async X=>{confirm("确定删除此任务？")&&(await Ei.deleteTask(X),await re())},Q=["thinking","generating_steps","generating_script","running"].includes(r.status)||j;return _.jsxs("div",{className:"flex flex-col h-full",children:[!c&&_.jsxs("div",{className:"m-3 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4 text-sm",children:[_.jsxs("div",{className:"flex items-center gap-2 font-semibold text-purple-800 mb-1",children:[_.jsx(ma,{size:16}),"配置 AI 开始使用"]}),_.jsx("p",{className:"text-purple-600 text-xs",children:"点击右上角设置按钮，输入 OpenRouter API Key"})]}),_.jsxs("div",{className:"flex-1 overflow-y-auto p-3 space-y-4",children:[_.jsx("div",{className:"bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden",children:_.jsxs("div",{className:"p-3 border-b border-slate-100",children:[_.jsxs("div",{className:"flex items-center gap-2 mb-2",children:[_.jsx("div",{className:"w-7 h-7 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center",children:_.jsx(og,{size:14,className:"text-white"})}),_.jsx("span",{className:"text-sm font-semibold text-slate-700",children:"AI Agent"}),_.jsx(lk,{status:r.status})]}),_.jsx("textarea",{ref:de,value:a,onChange:X=>o(X.target.value),placeholder:`描述你想要自动化的操作，例如：
 打开百度搜索 AI，点击第一个结果`,className:"w-full h-20 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none",disabled:Q,onKeyDown:X=>{X.key==="Enter"&&X.metaKey&&!Q&&D()}}),_.jsxs("div",{className:"flex justify-between items-center mt-2",children:[_.jsxs("div",{className:"text-xs text-slate-400",children:[p.name," · ⌘+Enter 发送"]}),_.jsx("button",{onClick:D,disabled:Q||!a.trim(),className:"px-4 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg text-sm hover:opacity-90 transition-opacity font-medium disabled:opacity-50 flex items-center gap-1.5",children:Q?_.jsxs(_.Fragment,{children:[_.jsx(mo,{size:14,className:"animate-spin"}),"处理中"]}):_.jsxs(_.Fragment,{children:[_.jsx(ma,{size:14}),"生成"]})})]})]})}),(r.steps.length>0||r.script)&&_.jsxs("div",{className:"bg-white rounded-xl border border-slate-200 shadow-sm p-3 space-y-3",children:[r.steps.length>0&&_.jsxs("div",{children:[_.jsxs("div",{className:"flex items-center gap-2 mb-2",children:[_.jsx("span",{className:"text-sm font-semibold text-slate-700",children:"执行步骤"}),_.jsxs("span",{className:"text-xs text-slate-400",children:["(",r.steps.length," 步)"]})]}),_.jsx(lb,{steps:r.steps})]}),r.script&&_.jsxs(_.Fragment,{children:[_.jsx(ob,{script:r.script}),r.status==="completed"&&_.jsx("button",{onClick:()=>G(),disabled:j,className:"w-full px-4 py-2.5 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50",children:j?_.jsxs(_.Fragment,{children:[_.jsx(mo,{size:16,className:"animate-spin"}),"执行中..."]}):_.jsxs(_.Fragment,{children:[_.jsx(So,{size:16}),"在当前页面执行"]})})]})]}),(r.error||I)&&_.jsxs("div",{className:"bg-red-50 border border-red-200 rounded-xl p-3",children:[_.jsxs("div",{className:"flex items-center gap-2 text-red-700 text-sm font-medium mb-1",children:[_.jsx(tg,{size:16}),I?"Workflow 执行失败":"生成出错"]}),_.jsx("p",{className:"text-red-600 text-xs",children:I||r.error}),I&&_.jsx("button",{onClick:()=>$(null),className:"mt-2 text-xs text-red-500 hover:text-red-700 underline",children:"关闭"})]}),v.length>0&&_.jsxs("div",{className:"space-y-2",children:[_.jsxs("div",{className:"flex items-center gap-2 px-1",children:[_.jsx(ex,{size:14,className:"text-slate-400"}),_.jsx("span",{className:"text-sm font-medium text-slate-600",children:"任务历史"}),_.jsxs("span",{className:"text-xs text-slate-400",children:["(",v.length,")"]})]}),_.jsx("div",{className:"space-y-2",children:v.map(X=>_.jsx(ik,{task:X,onExecute:()=>G(X),onSaveAsScript:()=>ie(X),onDelete:()=>Re(X.id)},X.id))})]})]})]})}const Jy={id:"demo-workflow",name:"示例：百度搜索",description:"演示如何使用 Pilot 进行多步骤自动化",code:`// === STEP: 打开百度 (https://www.baidu.com) ===
