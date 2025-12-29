@@ -303,10 +303,8 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
       return;
     }
 
-    if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://')) {
-      alert('无法在此页面执行，请打开一个普通网页');
-      return;
-    }
+    // 注意：不再在前端检测 chrome:// 等页面
+    // 后台会智能处理：如果第一步有 URL 会自动导航，否则返回友好错误
 
     setIsExecuting(true);
     setExecuteError(null);

@@ -210,6 +210,11 @@ function stopEventCapture() {
 
 // 监听来自 Background 的录制控制消息
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+  if (request.type === 'PING') {
+    sendResponse({ pong: true });
+    return;
+  }
+  
   if (request.type === 'RECORDING_CONTROL') {
     const { action } = request;
     

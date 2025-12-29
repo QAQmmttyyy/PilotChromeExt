@@ -2,6 +2,34 @@ import { WorkflowContext, WorkflowStep, RecordingSession, RecordedStep, Recordin
 
 console.log('Pilot background script loaded');
 
+// ============== Page Injection Utilities ==============
+function isInjectablePage(url: string | undefined): boolean {
+  if (!url) return false;
+  const blockedPrefixes = [
+    'chrome://',
+    'chrome-extension://',
+    'edge://',
+    'about:',
+    'devtools://',
+    'view-source:',
+  ];
+  return !blockedPrefixes.some(prefix => url.startsWith(prefix));
+}
+
+async function ensureContentScriptReady(tabId: number): Promise<void> {
+  // 尝试 ping content script，检查是否已注入
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+    console.log('[Pilot Engine] Content script already active');
+    return;
+  } catch {
+    // Content script 未响应，需要刷新页面让 manifest 自动注入
+    // 注意：不使用 chrome.scripting.executeScript 手动注入，因为构建后的文件名带 hash
+    console.log('[Pilot Engine] Content script not active, reloading page...');
+    await chrome.tabs.reload(tabId);
+  }
+}
+
 const globalStore: Record<string, any> = {};
 const workflows = new Map<number, WorkflowContext>();
 
@@ -461,18 +489,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   } else if (request.type === 'START_WORKFLOW') {
     const { steps, tabId } = request.payload;
     
-    // 异步处理：先确保页面就绪，再开始 workflow
+    // 异步处理：智能处理页面状态，确保 content script 就绪后再开始 workflow
     (async () => {
       try {
-        // 1. 发送 RESET_AGENT 触发配置同步
-        chrome.tabs.sendMessage(tabId, { type: 'RESET_AGENT' }).catch(() => {});
+        const tab = await chrome.tabs.get(tabId);
+        const currentUrl = tab.url;
         
-        // 2. 等待页面就绪（包括 PageAgent 初始化）
-        console.log(`[Pilot Engine] Waiting for page ready before starting workflow...`);
-        await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
+        if (!isInjectablePage(currentUrl)) {
+          // 当前页面不可注入（chrome://, about: 等）
+          const firstStepUrl = steps[0]?.url;
+          
+          if (firstStepUrl && isInjectablePage(firstStepUrl)) {
+            console.log(`[Pilot Engine] Current page not injectable, navigating to: ${firstStepUrl}`);
+            await chrome.tabs.update(tabId, { url: firstStepUrl });
+            await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
+          } else {
+            throw new Error('当前页面无法执行脚本，请先打开目标网页');
+          }
+        } else {
+          // 可注入页面：确保 content script 就绪（注入或刷新）
+          await ensureContentScriptReady(tabId);
+          chrome.tabs.sendMessage(tabId, { type: 'RESET_AGENT' }).catch(() => {});
+          console.log(`[Pilot Engine] Waiting for page ready before starting workflow...`);
+          await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
+        }
+        
         console.log(`[Pilot Engine] Page ready, starting workflow`);
-        
-        // 3. 页面已就绪，开始 workflow
         startWorkflow(steps, tabId);
       } catch (err) {
         console.error('[Pilot Engine] Failed to prepare workflow:', err);
