@@ -4,6 +4,7 @@ export interface WorkflowStep {
   url?: string; // 如果提供，引擎会先跳转到此 URL
   waitId?: number; // 内部使用：等待的 Tab ID
   code: string; // 此步骤要执行的代码
+  isAiStep?: boolean; // AI step 标记，用于控制 SPA 导航行为
 }
 
 // ============== Ready Event Types ==============

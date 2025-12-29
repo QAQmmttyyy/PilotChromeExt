@@ -44,6 +44,7 @@ export function parseScriptToWorkflow(scriptCode: string): WorkflowStep[] {
       const stepCode = scriptCode.substring(lastIndex, match.index).trim();
       // 将前置代码附加到步骤代码前（如果有）
       currentStep.code = preamble ? `${preamble}\n\n${stepCode}` : stepCode;
+      currentStep.isAiStep = stepCode.includes('pageAgent.execute');
       steps.push(currentStep as WorkflowStep);
     }
 
@@ -55,7 +56,7 @@ export function parseScriptToWorkflow(scriptCode: string): WorkflowStep[] {
       id: `step-${steps.length + 1}`,
       name,
       url,
-      code: '' // Will be filled in next iteration or end
+      code: ''
     };
     
     lastIndex = stepRegex.lastIndex;
@@ -65,6 +66,7 @@ export function parseScriptToWorkflow(scriptCode: string): WorkflowStep[] {
   if (currentStep) {
     const stepCode = scriptCode.substring(lastIndex).trim();
     currentStep.code = preamble ? `${preamble}\n\n${stepCode}` : stepCode;
+    currentStep.isAiStep = stepCode.includes('pageAgent.execute');
     steps.push(currentStep as WorkflowStep);
   }
 

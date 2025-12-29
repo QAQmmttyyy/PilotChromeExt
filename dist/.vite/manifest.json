@@ -14,7 +14,7 @@
     "name": "settings"
   },
   "src/background/index.ts": {
-    "file": "assets/index.ts-CkhcJO8f.js",
+    "file": "assets/index.ts-D1CR8g4j.js",
     "name": "index.ts",
     "src": "src/background/index.ts",
     "isEntry": true
@@ -29,7 +29,7 @@
     ]
   },
   "src/sidepanel/index.html": {
-    "file": "assets/index.html-DEgLvehQ.js",
+    "file": "assets/index.html-DQe6AThM.js",
     "name": "index.html",
     "src": "src/sidepanel/index.html",
     "isEntry": true,

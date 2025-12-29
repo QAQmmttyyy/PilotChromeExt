@@ -52,7 +52,12 @@ interface StepCompletionResolver {
 
 const stepCompletionResolvers = new Map<number, StepCompletionResolver>();
 
-function waitForStepCompletion(tabId: number, executingUrl: string, executingStepIndex: number): Promise<StepCompletionType> {
+function waitForStepCompletion(
+  tabId: number, 
+  executingUrl: string, 
+  executingStepIndex: number,
+  ignoreSpaNavigation: boolean = false
+): Promise<StepCompletionType> {
   // 清理旧的 resolver
   const existing = stepCompletionResolvers.get(tabId);
   if (existing) {
@@ -88,11 +93,16 @@ function waitForStepCompletion(tabId: number, executingUrl: string, executingSte
     };
     
     chrome.webNavigation.onCommitted.addListener(navigationCommitListener);
-    chrome.webNavigation.onHistoryStateUpdated.addListener(historyStateListener);
+    // AI step 不监听 SPA 导航，只依赖 workflow.next() 信号
+    if (!ignoreSpaNavigation) {
+      chrome.webNavigation.onHistoryStateUpdated.addListener(historyStateListener);
+    }
     
     const cleanup = () => {
       chrome.webNavigation.onCommitted.removeListener(navigationCommitListener);
-      chrome.webNavigation.onHistoryStateUpdated.removeListener(historyStateListener);
+      if (!ignoreSpaNavigation) {
+        chrome.webNavigation.onHistoryStateUpdated.removeListener(historyStateListener);
+      }
       stepCompletionResolvers.delete(tabId);
     };
     
@@ -103,7 +113,10 @@ function waitForStepCompletion(tabId: number, executingUrl: string, executingSte
       executingStepIndex
     });
     
-    console.log(`[Pilot Engine] Waiting for step completion: signal, mpa_navigation, or spa_navigation`);
+    const waitingFor = ignoreSpaNavigation 
+      ? 'signal or mpa_navigation (SPA ignored for AI step)'
+      : 'signal, mpa_navigation, or spa_navigation';
+    console.log(`[Pilot Engine] Waiting for step completion: ${waitingFor}`);
   });
 }
 
@@ -855,9 +868,9 @@ async function executeCurrentStep(tabId: number) {
     const executingStepIndex = currentStepIndex;
     const executingUrl = workflow.executingUrl!;
     
-    console.log(`[Pilot Engine] Waiting for step completion...`);
+    console.log(`[Pilot Engine] Waiting for step completion... (isAiStep: ${step.isAiStep || false})`);
     
-    const completionType = await waitForStepCompletion(tabId, executingUrl, executingStepIndex);
+    const completionType = await waitForStepCompletion(tabId, executingUrl, executingStepIndex, step.isAiStep || false);
     
     if (completionType === 'mpa_navigation') {
       // MPA 导航：等待新页面就绪后推进
