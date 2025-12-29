@@ -41,8 +41,10 @@ const globalStore: Record<string, any> = {};
 const workflows = new Map<number, WorkflowContext>();
 
 // ============== Step Completion System ==============
+type StepCompletionType = 'signal' | 'mpa_navigation' | 'spa_navigation';
+
 interface StepCompletionResolver {
-  resolve: (type: 'signal' | 'navigation') => void;
+  resolve: (type: StepCompletionType) => void;
   reject: (reason: string) => void;
   cleanup: () => void;
   executingStepIndex: number;
@@ -50,7 +52,7 @@ interface StepCompletionResolver {
 
 const stepCompletionResolvers = new Map<number, StepCompletionResolver>();
 
-function waitForStepCompletion(tabId: number, executingUrl: string, executingStepIndex: number): Promise<'signal' | 'navigation'> {
+function waitForStepCompletion(tabId: number, executingUrl: string, executingStepIndex: number): Promise<StepCompletionType> {
   // 清理旧的 resolver
   const existing = stepCompletionResolvers.get(tabId);
   if (existing) {
@@ -61,25 +63,36 @@ function waitForStepCompletion(tabId: number, executingUrl: string, executingSte
   return new Promise((resolve, reject) => {
     let resolved = false;
     
-    const safeResolve = (type: 'signal' | 'navigation') => {
+    const safeResolve = (type: StepCompletionType) => {
       if (!resolved) {
         resolved = true;
+        cleanup();
         resolve(type);
       }
     };
     
-    // 监听 URL 变化（MPA 导航场景）
-    const urlChangeListener = (tabIdChanged: number, changeInfo: any) => {
-      if (tabIdChanged === tabId && changeInfo.url && changeInfo.url !== executingUrl) {
-        console.log(`[Pilot Engine] URL changed detected: ${executingUrl} -> ${changeInfo.url}`);
-        safeResolve('navigation');
+    // 监听 MPA 导航（完整页面加载）
+    const navigationCommitListener = (details: chrome.webNavigation.WebNavigationTransitionCallbackDetails) => {
+      if (details.tabId === tabId && details.frameId === 0 && details.url !== executingUrl) {
+        console.log(`[Pilot Engine] MPA navigation detected: ${executingUrl} -> ${details.url}`);
+        safeResolve('mpa_navigation');
       }
     };
     
-    chrome.tabs.onUpdated.addListener(urlChangeListener);
+    // 监听 SPA 路由变化（History API: pushState/replaceState）
+    const historyStateListener = (details: chrome.webNavigation.WebNavigationTransitionCallbackDetails) => {
+      if (details.tabId === tabId && details.frameId === 0 && details.url !== executingUrl) {
+        console.log(`[Pilot Engine] SPA navigation detected: ${executingUrl} -> ${details.url}`);
+        safeResolve('spa_navigation');
+      }
+    };
+    
+    chrome.webNavigation.onCommitted.addListener(navigationCommitListener);
+    chrome.webNavigation.onHistoryStateUpdated.addListener(historyStateListener);
     
     const cleanup = () => {
-      chrome.tabs.onUpdated.removeListener(urlChangeListener);
+      chrome.webNavigation.onCommitted.removeListener(navigationCommitListener);
+      chrome.webNavigation.onHistoryStateUpdated.removeListener(historyStateListener);
       stepCompletionResolvers.delete(tabId);
     };
     
@@ -90,7 +103,7 @@ function waitForStepCompletion(tabId: number, executingUrl: string, executingSte
       executingStepIndex
     });
     
-    console.log(`[Pilot Engine] Waiting for step completion: signal or navigation`);
+    console.log(`[Pilot Engine] Waiting for step completion: signal, mpa_navigation, or spa_navigation`);
   });
 }
 
@@ -846,9 +859,9 @@ async function executeCurrentStep(tabId: number) {
     
     const completionType = await waitForStepCompletion(tabId, executingUrl, executingStepIndex);
     
-    if (completionType === 'navigation') {
+    if (completionType === 'mpa_navigation') {
       // MPA 导航：等待新页面就绪后推进
-      console.log(`[Pilot Engine] Navigation detected, waiting for new page ready...`);
+      console.log(`[Pilot Engine] MPA navigation detected, waiting for new page ready...`);
       await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
       console.log(`[Pilot Engine] New page ready, auto-advancing workflow`);
       
@@ -858,6 +871,16 @@ async function executeCurrentStep(tabId: number) {
         advanceWorkflow(tabId);
       } else {
         console.log(`[Pilot Engine] Workflow already advanced by signal, skipping navigation-based advance`);
+      }
+    } else if (completionType === 'spa_navigation') {
+      // SPA 导航：页面未重新加载，直接推进
+      console.log(`[Pilot Engine] SPA navigation completed, advancing workflow`);
+      
+      const latestWorkflow = workflows.get(tabId);
+      if (latestWorkflow && latestWorkflow.currentStepIndex === executingStepIndex) {
+        advanceWorkflow(tabId);
+      } else {
+        console.log(`[Pilot Engine] Workflow already advanced by signal, skipping SPA navigation-based advance`);
       }
     } else {
       // 'signal': workflow.next/finish 已经调用了 advanceWorkflow，无需额外操作
