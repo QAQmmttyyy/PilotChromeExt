@@ -1113,18 +1113,18 @@ function App() {
         onChange={(id) => setActiveTab(id as 'agent' | 'scripts')} 
       />
 
-      {/* Tab Content */}
-      <div className="flex-1 overflow-hidden">
-        {activeTab === 'agent' && (
+      {/* Tab Content - 使用 CSS 隐藏保持状态 */}
+      <div className="flex-1 overflow-hidden relative">
+        <div className={`absolute inset-0 ${activeTab === 'agent' ? '' : 'hidden'}`}>
           <AgentTab onOpenSettings={handleOpenSettings} />
-        )}
-        {activeTab === 'scripts' && (
+        </div>
+        <div className={`absolute inset-0 ${activeTab === 'scripts' ? '' : 'hidden'}`}>
           <ScriptsTabContent 
             onOpenSettings={handleOpenSettings}
             showSettings={showSettings}
             onCloseSettings={handleCloseSettings}
           />
-        )}
+        </div>
       </div>
 
       {/* Global Settings Modal (for Agent tab) */}
