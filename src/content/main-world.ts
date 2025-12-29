@@ -51,6 +51,14 @@ window.addEventListener('message', (event) => {
           apiKey: config.apiKey,
           model: config.model,
           baseURL: baseURL,
+          onBeforeStep: async function(this: PageAgent) {
+            // 在每个步骤之前，移除所有 target="_blank" 属性
+            // 这样点击链接时会在当前页打开而不是新标签页
+            document.querySelectorAll('a[target="_blank"]').forEach(el => {
+              el.removeAttribute('target');
+              console.log('[Pilot] Removed target="_blank" from:', el);
+            });
+          },
         });
         console.log('[Pilot] PageAgent initialized successfully');
         
