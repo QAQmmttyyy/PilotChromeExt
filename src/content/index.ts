@@ -6,6 +6,10 @@ import { settings } from '../lib/settings';
 
 console.log('Pilot Bridge (Isolated World) loaded');
 
+// Note: Main world script injection is handled by background script
+// via chrome.scripting.executeScript with world: 'MAIN'
+// This is more reliable than dynamic injection and bypasses CSP issues
+
 // ============== Ready Event System ==============
 let pageAgentReady = false;
 let contentScriptReady = false;

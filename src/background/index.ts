@@ -432,6 +432,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type && ['CONTENT_SCRIPT_READY', 'PAGE_AGENT_READY', 'PAGE_FULLY_READY'].includes(request.type)) {
     const tabId = sender.tab?.id;
     if (tabId) {
+      // 在 content script 就绪时注入 main-world script
+      if (request.type === 'CONTENT_SCRIPT_READY') {
+        console.log(`[Pilot] Content script ready in tab ${tabId}, injecting main-world script`);
+        chrome.scripting.executeScript({
+          target: { tabId },
+          files: ['main-world.js'],
+          world: 'MAIN',
+        }).then(() => {
+          console.log(`[Pilot] Main world script injected successfully in tab ${tabId}`);
+        }).catch((error) => {
+          console.error(`[Pilot] Failed to inject main world script in tab ${tabId}:`, error);
+        });
+      }
+      
       handleReadyEvent({
         type: request.type as ReadyEventType,
         tabId,
@@ -455,13 +469,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
         // 2. 等待页面就绪（包括 PageAgent 初始化）
         console.log(`[Pilot Engine] Waiting for page ready before starting workflow...`);
-        await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 10000);
+        await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
         console.log(`[Pilot Engine] Page ready, starting workflow`);
         
         // 3. 页面已就绪，开始 workflow
         startWorkflow(steps, tabId);
       } catch (err) {
         console.error('[Pilot Engine] Failed to prepare workflow:', err);
+        const errorMsg = `准备执行失败: ${err instanceof Error ? err.message : String(err)}`;
+        notifyWorkflowStatus(tabId, 'failed', errorMsg);
       }
     })();
   } else if (request.type === 'RECORDING_STEP') {
@@ -607,6 +623,9 @@ function handleBridgeAction(action: string, payload: any, sender: chrome.runtime
         wf.status = 'completed';
         workflows.delete(tabId);
         console.log(`[Pilot Engine] Workflow finished manually in Tab ${tabId}.`);
+        
+        // 通知 sidepanel
+        notifyWorkflowStatus(tabId, 'completed');
       }
       break;
     case 'workflowFail':
@@ -620,9 +639,14 @@ function handleBridgeAction(action: string, payload: any, sender: chrome.runtime
         }
         
         failedWf.status = 'failed';
-        workflows.delete(tabId);
         const stepName = failedWf.steps[failedWf.currentStepIndex]?.name || 'Unknown';
+        const errorMsg = `步骤 "${stepName}" 失败: ${payload.reason}`;
+        workflows.delete(tabId);
         console.error(`[Pilot Engine] ❌ Workflow FAILED at Step "${stepName}": ${payload.reason}`);
+        
+        // 通知 sidepanel
+        notifyWorkflowStatus(tabId, 'failed', errorMsg);
+        
         // Notify user via alert in the tab
         chrome.scripting.executeScript({
           target: { tabId },
@@ -634,6 +658,13 @@ function handleBridgeAction(action: string, payload: any, sender: chrome.runtime
       }
       break;
   }
+}
+
+function notifyWorkflowStatus(tabId: number, status: 'completed' | 'failed', error?: string) {
+  chrome.runtime.sendMessage({
+    type: 'WORKFLOW_STATUS_UPDATE',
+    payload: { tabId, status, error }
+  }).catch(() => {});
 }
 
 async function startWorkflow(steps: WorkflowStep[], tabId: number) {
@@ -666,6 +697,7 @@ async function executeCurrentStep(tabId: number) {
     console.log(`[Pilot Engine] All steps completed for Tab ${tabId}.`);
     workflow.status = 'completed';
     workflows.delete(tabId);
+    notifyWorkflowStatus(tabId, 'completed');
     return;
   }
 
@@ -785,15 +817,19 @@ async function executeCurrentStep(tabId: number) {
 
   } catch (err: any) {
     console.error('[Pilot Engine] Execution failed:', err);
+    const errorMsg = err.message || String(err);
     workflow.status = 'failed';
     workflows.delete(tabId);
+    
+    // 通知 sidepanel
+    notifyWorkflowStatus(tabId, 'failed', errorMsg);
 
     // 通知用户
     try {
       await chrome.scripting.executeScript({
         target: { tabId },
         func: (msg: string) => alert(`Pilot 执行失败：\n${msg}`),
-        args: [err.message || String(err)]
+        args: [errorMsg]
       });
     } catch (e) {
       console.error('[Pilot Engine] Failed to show error alert:', e);
@@ -812,6 +848,7 @@ function advanceWorkflow(tabId: number) {
     console.log(`[Pilot Engine] Workflow Completed in Tab ${tabId}! 🚀`);
     workflow.status = 'completed';
     workflows.delete(tabId);
+    notifyWorkflowStatus(tabId, 'completed');
     return;
   }
 

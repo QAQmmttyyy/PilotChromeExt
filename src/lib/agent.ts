@@ -296,3 +296,59 @@ export function createAgent(config: AgentConfig, onStateChange?: (state: AgentSt
   return new PilotAgent(config, onStateChange);
 }
 
+// ============== Agent Task Storage ==============
+
+export interface AgentTask {
+  id: string;
+  prompt: string;
+  steps: RecordedStep[];
+  script: string;
+  status: 'completed' | 'failed';
+  createdAt: number;
+  executedAt?: number;
+}
+
+const AGENT_TASKS_KEY = 'agentTasks';
+const MAX_TASKS = 50;
+
+export const agentTaskStorage = {
+  async getTasks(): Promise<AgentTask[]> {
+    const result = await chrome.storage.local.get(AGENT_TASKS_KEY);
+    return (result[AGENT_TASKS_KEY] as AgentTask[]) || [];
+  },
+
+  async saveTask(task: AgentTask): Promise<void> {
+    const tasks = await this.getTasks();
+    const existingIdx = tasks.findIndex(t => t.id === task.id);
+    
+    if (existingIdx >= 0) {
+      tasks[existingIdx] = task;
+    } else {
+      tasks.unshift(task);
+    }
+
+    // 限制历史数量
+    const trimmed = tasks.slice(0, MAX_TASKS);
+    await chrome.storage.local.set({ [AGENT_TASKS_KEY]: trimmed });
+  },
+
+  async deleteTask(id: string): Promise<void> {
+    const tasks = await this.getTasks();
+    const filtered = tasks.filter(t => t.id !== id);
+    await chrome.storage.local.set({ [AGENT_TASKS_KEY]: filtered });
+  },
+
+  async updateExecutedAt(id: string): Promise<void> {
+    const tasks = await this.getTasks();
+    const task = tasks.find(t => t.id === id);
+    if (task) {
+      task.executedAt = Date.now();
+      await chrome.storage.local.set({ [AGENT_TASKS_KEY]: tasks });
+    }
+  },
+
+  async clearAll(): Promise<void> {
+    await chrome.storage.local.remove(AGENT_TASKS_KEY);
+  }
+};
+

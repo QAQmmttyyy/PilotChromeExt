@@ -1,39 +1,31 @@
 {
   "../../../../@crx/manifest": {
-    "file": "assets/crx-manifest.js-DOOvejf4.js",
+    "file": "assets/crx-manifest.js-CXtCSvxK.js",
     "name": "crx-manifest.js",
     "src": "../../../../@crx/manifest",
     "isEntry": true
   },
-  "_coerce-DkLxnau5.js": {
-    "file": "assets/coerce-DkLxnau5.js",
-    "name": "coerce"
+  "_index-C-1QUHRG.css": {
+    "file": "assets/index-C-1QUHRG.css",
+    "src": "_index-C-1QUHRG.css"
   },
-  "_index-D-5eSZcd.css": {
-    "file": "assets/index-D-5eSZcd.css",
-    "src": "_index-D-5eSZcd.css"
-  },
-  "_index-ssJt6nYv.js": {
-    "file": "assets/index-ssJt6nYv.js",
+  "_index-ZtvAl3WD.js": {
+    "file": "assets/index-ZtvAl3WD.js",
     "name": "index",
     "css": [
-      "assets/index-D-5eSZcd.css"
+      "assets/index-C-1QUHRG.css"
     ]
   },
   "_index.ts-loader-DWX-wJbM.js": {
     "file": "assets/index.ts-loader-DWX-wJbM.js",
     "src": "_index.ts-loader-DWX-wJbM.js"
   },
-  "_main-world.ts-loader-Bl6jTmg2.js": {
-    "file": "assets/main-world.ts-loader-Bl6jTmg2.js",
-    "src": "_main-world.ts-loader-Bl6jTmg2.js"
-  },
   "_settings-DkJnF7oq.js": {
     "file": "assets/settings-DkJnF7oq.js",
     "name": "settings"
   },
   "src/background/index.ts": {
-    "file": "assets/index.ts-CRVvh4p7.js",
+    "file": "assets/index.ts-CII22Rra.js",
     "name": "index.ts",
     "src": "src/background/index.ts",
     "isEntry": true
@@ -47,33 +39,23 @@
       "_settings-DkJnF7oq.js"
     ]
   },
-  "src/content/main-world.ts": {
-    "file": "assets/main-world.ts-Cupkw6BA.js",
-    "name": "main-world.ts",
-    "src": "src/content/main-world.ts",
-    "isEntry": true,
-    "imports": [
-      "_coerce-DkLxnau5.js"
-    ]
-  },
   "src/popup/index.html": {
-    "file": "assets/index.html-gm0aMR7u.js",
+    "file": "assets/index.html-Ds_LpR5w.js",
     "name": "index.html",
     "src": "src/popup/index.html",
     "isEntry": true,
     "imports": [
-      "_index-ssJt6nYv.js"
+      "_index-ZtvAl3WD.js"
     ]
   },
   "src/sidepanel/index.html": {
-    "file": "assets/index.html-BJRQIcbx.js",
+    "file": "assets/index.html-DAC073HL.js",
     "name": "index.html",
     "src": "src/sidepanel/index.html",
     "isEntry": true,
     "imports": [
-      "_index-ssJt6nYv.js",
-      "_settings-DkJnF7oq.js",
-      "_coerce-DkLxnau5.js"
+      "_index-ZtvAl3WD.js",
+      "_settings-DkJnF7oq.js"
     ]
   }
 }
