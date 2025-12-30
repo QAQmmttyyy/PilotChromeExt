@@ -1,194 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   Sparkles, 
-  Navigation, 
-  ChevronDown, 
-  ChevronRight, 
   Loader2, 
-  CheckCircle2, 
   XCircle,
-  Code,
-  Zap,
-  Trash2,
-  Save,
-  Clock,
   History
 } from 'lucide-react';
-import { PilotAgent, AgentState, createAgent, AgentTask, agentTaskStorage } from '../lib/agent';
-import { settings } from '../lib/settings';
-import { RecordedStep } from '../lib/types';
-import { AVAILABLE_MODELS, getModelInfo } from '../lib/ai';
-import { parseScriptToWorkflow } from '../lib/parser';
-import { Script, storage } from '../lib/storage';
+import { AgentState, createAgent, AgentTask, agentTaskStorage } from '../../lib/agent';
+import { settings } from '../../lib/settings';
+import { AVAILABLE_MODELS, getModelInfo } from '../../lib/ai';
+import { parseScriptToWorkflow } from '../../lib/parser';
+import { Script, storage } from '../../lib/storage';
+import { PromptDisplay } from './PromptDisplay';
+import { StepsPreview } from './StepsPreview';
+import { ScriptPreview } from './ScriptPreview';
+import { TaskHistoryItem } from './TaskHistoryItem';
 
-interface AgentTabProps {
+interface TaskTabProps {
   onOpenSettings: () => void;
 }
 
-function StepIcon({ type }: { type: string }) {
-  if (type === 'navigate') {
-    return <Navigation size={14} className="text-blue-500" />;
-  }
-  return <Sparkles size={14} className="text-purple-500" />;
-}
-
-function StatusBadge({ status }: { status: AgentState['status'] }) {
-  const config: Record<AgentState['status'], { label: string; color: string; icon?: React.ReactNode }> = {
-    idle: { label: '就绪', color: 'bg-slate-100 text-slate-600' },
-    thinking: { label: '思考中', color: 'bg-yellow-100 text-yellow-700', icon: <Loader2 size={12} className="animate-spin" /> },
-    generating_steps: { label: '生成步骤', color: 'bg-blue-100 text-blue-700', icon: <Loader2 size={12} className="animate-spin" /> },
-    generating_script: { label: '生成脚本', color: 'bg-purple-100 text-purple-700', icon: <Loader2 size={12} className="animate-spin" /> },
-    running: { label: '执行中', color: 'bg-green-100 text-green-700', icon: <Loader2 size={12} className="animate-spin" /> },
-    completed: { label: '完成', color: 'bg-emerald-100 text-emerald-700', icon: <CheckCircle2 size={12} /> },
-    error: { label: '错误', color: 'bg-red-100 text-red-700', icon: <XCircle size={12} /> },
-  };
-
-  const { label, color, icon } = config[status];
-
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${color}`}>
-      {icon}
-      {label}
-    </span>
-  );
-}
-
-function StepsPreview({ steps, compact = false }: { steps: RecordedStep[]; compact?: boolean }) {
-  if (steps.length === 0) return null;
-
-  return (
-    <div className={compact ? "space-y-0.5" : "space-y-1"}>
-      {steps.map((step, idx) => (
-        <div 
-          key={step.id} 
-          className={`flex items-start gap-2 ${compact ? 'py-1' : 'p-2 bg-slate-50 rounded-lg'} text-sm`}
-        >
-          <span className="text-slate-400 w-5 text-right shrink-0">{idx + 1}.</span>
-          <StepIcon type={step.type} />
-          <span className="text-slate-700 flex-1 text-xs">
-            {step.type === 'navigate' ? (
-              <span className="font-mono text-blue-600 break-all">{step.url}</span>
-            ) : (
-              step.value
-            )}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ScriptPreview({ script }: { script: string }) {
-  const [expanded, setExpanded] = useState(false);
-
-  if (!script) return null;
-
-  return (
-    <div className="border border-slate-200 rounded-lg overflow-hidden">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-3 py-2 bg-slate-50 text-sm font-medium text-slate-700 hover:bg-slate-100"
-      >
-        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <Code size={14} />
-        生成的脚本
-      </button>
-      {expanded && (
-        <pre className="p-3 text-xs font-mono bg-slate-900 text-slate-100 overflow-x-auto max-h-64">
-          {script}
-        </pre>
-      )}
-    </div>
-  );
-}
-
-function formatTimeAgo(timestamp: number): string {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return '刚刚';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}分钟前`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}小时前`;
-  const days = Math.floor(hours / 24);
-  return `${days}天前`;
-}
-
-function TaskHistoryItem({ 
-  task, 
-  onExecute, 
-  onSaveAsScript, 
-  onDelete 
-}: { 
-  task: AgentTask; 
-  onExecute: () => void; 
-  onSaveAsScript: () => void; 
-  onDelete: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
-      <div 
-        className="flex items-start gap-2 p-3 cursor-pointer hover:bg-slate-50"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <div className="shrink-0 pt-0.5">
-          {expanded ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-sm text-slate-700 line-clamp-2">{task.prompt}</div>
-          <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
-            <span>{task.steps.length} 步骤</span>
-            <span>·</span>
-            <span className="flex items-center gap-1">
-              <Clock size={10} />
-              {formatTimeAgo(task.createdAt)}
-            </span>
-            {task.executedAt && (
-              <>
-                <span>·</span>
-                <span className="text-green-600">已执行</span>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-          <button
-            onClick={onExecute}
-            className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded"
-            title="执行"
-          >
-            <Play size={14} />
-          </button>
-          <button
-            onClick={onSaveAsScript}
-            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-            title="保存为脚本"
-          >
-            <Save size={14} />
-          </button>
-          <button
-            onClick={onDelete}
-            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded"
-            title="删除"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      </div>
-      
-      {expanded && (
-        <div className="border-t border-slate-100 p-3 space-y-3 bg-slate-50">
-          <StepsPreview steps={task.steps} compact />
-          <ScriptPreview script={task.script} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function AgentTab({ onOpenSettings }: AgentTabProps) {
+export function TaskTab({ onOpenSettings }: TaskTabProps) {
   const [prompt, setPrompt] = useState('');
   const [agentState, setAgentState] = useState<AgentState>({
     status: 'idle',
@@ -200,16 +32,16 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
   const [currentModel, setCurrentModel] = useState(AVAILABLE_MODELS[0]);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [currentPrompt, setCurrentPrompt] = useState<string>('');
   const [isExecuting, setIsExecuting] = useState(false);
   const [executeError, setExecuteError] = useState<string | null>(null);
-  const agentRef = useRef<PilotAgent | null>(null);
+  const agentRef = useRef<ReturnType<typeof createAgent> | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     checkApiKey();
     loadTasks();
     
-    // 监听 workflow 状态更新
     const handleMessage = (message: any) => {
       if (message.type === 'WORKFLOW_STATUS_UPDATE') {
         const { status, error } = message.payload;
@@ -250,6 +82,7 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
 
     const taskId = crypto.randomUUID();
     setCurrentTaskId(taskId);
+    setCurrentPrompt(prompt.trim());
 
     const agent = createAgent(
       { apiKey: config.apiKey, model: config.model },
@@ -260,7 +93,6 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
     try {
       const finalState = await agent.run(prompt.trim());
       
-      // 保存到历史
       const newTask: AgentTask = {
         id: taskId,
         prompt: prompt.trim(),
@@ -274,7 +106,6 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
       setPrompt('');
     } catch (error) {
       console.error('Agent error:', error);
-      // 保存失败的任务
       const failedTask: AgentTask = {
         id: taskId,
         prompt: prompt.trim(),
@@ -303,9 +134,6 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
       return;
     }
 
-    // 注意：不再在前端检测 chrome:// 等页面
-    // 后台会智能处理：如果第一步有 URL 会自动导航，否则返回友好错误
-
     setIsExecuting(true);
     setExecuteError(null);
 
@@ -316,7 +144,6 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
         payload: { steps: workflowSteps, tabId: tab.id }
       });
 
-      // 更新执行时间
       if (taskId) {
         await agentTaskStorage.updateExecutedAt(taskId);
         await loadTasks();
@@ -350,6 +177,11 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
     }
   };
 
+  const handleCopyToInput = (text: string) => {
+    setPrompt(text);
+    inputRef.current?.focus();
+  };
+
   const isProcessing = ['thinking', 'generating_steps', 'generating_script', 'running'].includes(agentState.status) || isExecuting;
 
   return (
@@ -370,13 +202,6 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
         {/* 输入区域 */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-3 border-b border-slate-100">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                <Zap size={14} className="text-white" />
-              </div>
-              <span className="text-sm font-semibold text-slate-700">AI Agent</span>
-              <StatusBadge status={agentState.status} />
-            </div>
             <textarea
               ref={inputRef}
               value={prompt}
@@ -415,13 +240,20 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
           </div>
         </div>
 
-        {/* 当前任务预览（生成中或刚完成） */}
-        {(agentState.steps.length > 0 || agentState.script) && (
+        {/* 当前任务预览 */}
+        {(currentPrompt || agentState.steps.length > 0 || agentState.script) && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 space-y-3">
+            {currentPrompt && (
+              <PromptDisplay 
+                prompt={currentPrompt} 
+                onCopyToInput={handleCopyToInput}
+              />
+            )}
+
             {agentState.steps.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-sm font-semibold text-slate-700">执行步骤</span>
+                  <span className="text-sm font-medium text-slate-600">执行步骤</span>
                   <span className="text-xs text-slate-400">({agentState.steps.length} 步)</span>
                 </div>
                 <StepsPreview steps={agentState.steps} />
@@ -491,6 +323,7 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
                   onExecute={() => handleExecute(task)}
                   onSaveAsScript={() => handleSaveAsScript(task)}
                   onDelete={() => handleDeleteTask(task.id)}
+                  onCopyToInput={handleCopyToInput}
                 />
               ))}
             </div>
@@ -500,3 +333,4 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
     </div>
   );
 }
+

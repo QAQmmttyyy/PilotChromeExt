@@ -6,7 +6,14 @@ import { generateScriptStream, cleanGeneratedCode, buildUserMessage, buildRecord
 import { settings } from '../lib/settings';
 import { RecordingSession, RecordedStep } from '../lib/types';
 import { Tabs } from '../components/Tabs';
-import { AgentTab } from '../components/AgentTab';
+import { TaskTab } from '../components/task';
+
+const TAB_ID = {
+  TASK: 'task',
+  SCRIPTS: 'scripts',
+} as const;
+
+type TabId = typeof TAB_ID[keyof typeof TAB_ID];
 
 // Seed data
 const SEED_SCRIPT: Script = {
@@ -1081,12 +1088,12 @@ function ScriptsTabContent({
 
 // Main App with Tabs
 function App() {
-  const [activeTab, setActiveTab] = useState<'agent' | 'scripts'>('agent');
+  const [activeTab, setActiveTab] = useState<TabId>(TAB_ID.TASK);
   const [showSettings, setShowSettings] = useState(false);
 
   const tabs = [
-    { id: 'agent', label: 'Agent', icon: <Zap size={14} /> },
-    { id: 'scripts', label: 'Scripts', icon: <FileCode size={14} /> },
+    { id: TAB_ID.TASK, label: 'Task', icon: <Zap size={14} /> },
+    { id: TAB_ID.SCRIPTS, label: 'Scripts', icon: <FileCode size={14} /> },
   ];
 
   const handleOpenSettings = () => setShowSettings(true);
@@ -1110,15 +1117,15 @@ function App() {
       <Tabs 
         tabs={tabs} 
         activeTab={activeTab} 
-        onChange={(id) => setActiveTab(id as 'agent' | 'scripts')} 
+        onChange={(id) => setActiveTab(id as TabId)} 
       />
 
       {/* Tab Content - 使用 CSS 隐藏保持状态 */}
       <div className="flex-1 overflow-hidden relative">
-        <div className={`absolute inset-0 ${activeTab === 'agent' ? '' : 'hidden'}`}>
-          <AgentTab onOpenSettings={handleOpenSettings} />
+        <div className={`absolute inset-0 ${activeTab === TAB_ID.TASK ? '' : 'hidden'}`}>
+          <TaskTab onOpenSettings={handleOpenSettings} />
         </div>
-        <div className={`absolute inset-0 ${activeTab === 'scripts' ? '' : 'hidden'}`}>
+        <div className={`absolute inset-0 ${activeTab === TAB_ID.SCRIPTS ? '' : 'hidden'}`}>
           <ScriptsTabContent 
             onOpenSettings={handleOpenSettings}
             showSettings={showSettings}
@@ -1127,8 +1134,8 @@ function App() {
         </div>
       </div>
 
-      {/* Global Settings Modal (for Agent tab) */}
-      {showSettings && activeTab === 'agent' && (
+      {/* Global Settings Modal (for Task tab) */}
+      {showSettings && activeTab === TAB_ID.TASK && (
         <SettingsPanel onClose={handleCloseSettings} />
       )}
     </div>

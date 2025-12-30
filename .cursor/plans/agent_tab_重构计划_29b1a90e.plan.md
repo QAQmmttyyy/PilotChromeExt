@@ -17,7 +17,7 @@ todos:
     content: 创建 Tabs 组件
     status: completed
   - id: create-agent-tab
-    content: 创建 AgentTab 组件（输入框 + 执行面板 + 步骤预览）
+    content: 创建 TaskTab 组件（输入框 + 执行面板 + 步骤预览）
     status: completed
     dependencies:
       - create-agent
@@ -37,7 +37,7 @@ todos:
 flowchart LR
     subgraph UI [Side Panel]
         Tabs[Tabs 组件]
-        AgentTab[Agent Tab]
+        TaskTab[Agent Tab]
         ScriptsTab[Scripts Tab]
     end
     
@@ -53,9 +53,9 @@ flowchart LR
         Storage[Chrome Storage]
     end
     
-    Tabs --> AgentTab
+    Tabs --> TaskTab
     Tabs --> ScriptsTab
-    AgentTab --> AgentCore
+    TaskTab --> AgentCore
     AgentCore --> Tool1
     AgentCore --> Tool2
     AgentCore --> Tool3
@@ -116,26 +116,26 @@ export interface Script {
 ```mermaid
 sequenceDiagram
     participant User
-    participant AgentTab
+    participant TaskTab
     participant AgentCore
     participant Tool_Steps as generate_steps
     participant Tool_Script as generate_script
     participant Tool_Run as run_workflow
     participant Background
     
-    User->>AgentTab: 输入任务描述
-    AgentTab->>AgentCore: 调用 agent
+    User->>TaskTab: 输入任务描述
+    TaskTab->>AgentCore: 调用 agent
     AgentCore->>Tool_Steps: 解析描述生成 steps
-    Tool_Steps-->>AgentTab: 返回 steps（可预览）
+    Tool_Steps-->>TaskTab: 返回 steps（可预览）
     AgentCore->>Tool_Script: steps 转脚本
-    Tool_Script-->>AgentTab: 返回脚本代码
+    Tool_Script-->>TaskTab: 返回脚本代码
     AgentCore->>Tool_Run: 执行脚本
     Tool_Run->>Background: START_WORKFLOW
-    Background-->>AgentTab: 执行状态更新
+    Background-->>TaskTab: 执行状态更新
 ```
 
 
 
 ## 6. 关键文件变更
 
-| 文件 | 变更 ||------|------|| [`src/lib/agent.ts`](src/lib/agent.ts) | **新建** - Agent 核心 + Tools 定义 || [`src/lib/storage.ts`](src/lib/storage.ts) | Script 接口增加 steps 字段 || [`src/sidepanel/App.tsx`](src/sidepanel/App.tsx) | 重构为 Tabs 视图，抽取组件 || [`src/components/Tabs.tsx`](src/components/Tabs.tsx) | **新建** - Tabs 组件 || [`src/components/AgentTab.tsx`](src/components/AgentTab.tsx) | **新建** - Agent 交互界面 || [`package.json`](package.json) | 添加 `ai`, `@ai-sdk/openai` 依赖 |
+| 文件 | 变更 ||------|------|| [`src/lib/agent.ts`](src/lib/agent.ts) | **新建** - Agent 核心 + Tools 定义 || [`src/lib/storage.ts`](src/lib/storage.ts) | Script 接口增加 steps 字段 || [`src/sidepanel/App.tsx`](src/sidepanel/App.tsx) | 重构为 Tabs 视图，抽取组件 || [`src/components/Tabs.tsx`](src/components/Tabs.tsx) | **新建** - Tabs 组件 || [`src/components/TaskTab.tsx`](src/components/TaskTab.tsx) | **新建** - Agent 交互界面 || [`package.json`](package.json) | 添加 `ai`, `@ai-sdk/openai` 依赖 |
