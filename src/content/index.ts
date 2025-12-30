@@ -288,11 +288,11 @@ window.addEventListener('message', (event) => {
         payload: { data } 
       });
     },
-    finish: () => {
+    finish: (data?: any) => {
       chrome.runtime.sendMessage({ 
         type: 'PILOT_BRIDGE_ACTION', 
         action: 'workflowFinish', 
-        payload: {} 
+        payload: { data } 
       });
     },
     fail: (reason: string) => {

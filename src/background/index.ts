@@ -697,10 +697,10 @@ function handleBridgeAction(action: string, payload: any, sender: chrome.runtime
         
         wf.status = 'completed';
         workflows.delete(tabId);
-        console.log(`[Pilot Engine] Workflow finished manually in Tab ${tabId}.`);
+        console.log(`[Pilot Engine] Workflow finished manually in Tab ${tabId}.`, payload.data);
         
         // 通知 sidepanel
-        notifyWorkflowStatus(tabId, 'completed');
+        notifyWorkflowStatus(tabId, 'completed', undefined, payload.data);
       }
       break;
     case 'workflowFail':
@@ -735,10 +735,10 @@ function handleBridgeAction(action: string, payload: any, sender: chrome.runtime
   }
 }
 
-function notifyWorkflowStatus(tabId: number, status: 'completed' | 'failed', error?: string) {
+function notifyWorkflowStatus(tabId: number, status: 'completed' | 'failed', error?: string, data?: any) {
   chrome.runtime.sendMessage({
     type: 'WORKFLOW_STATUS_UPDATE',
-    payload: { tabId, status, error }
+    payload: { tabId, status, error, data }
   }).catch(() => {});
 }
 

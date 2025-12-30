@@ -113,10 +113,10 @@ window.Pilot = {
         payload: { data } 
       }, '*');
     },
-    finish: () => {
+    finish: (data?: any) => {
       console.log('[Pilot] Workflow finished');
       delete (window as any).PilotData;
-      window.postMessage({ source: 'PILOT_SCRIPT', action: 'workflowFinish', payload: {} }, '*');
+      window.postMessage({ source: 'PILOT_SCRIPT', action: 'workflowFinish', payload: { data } }, '*');
     },
     fail: (reason: string) => {
       console.error('[Pilot] Workflow FAILED:', reason);

@@ -5,22 +5,22 @@
     "src": "../../../../@crx/manifest",
     "isEntry": true
   },
-  "_index.ts-loader-Du_t97g8.js": {
-    "file": "assets/index.ts-loader-Du_t97g8.js",
-    "src": "_index.ts-loader-Du_t97g8.js"
+  "_index.ts-loader-Bt0wRZbL.js": {
+    "file": "assets/index.ts-loader-Bt0wRZbL.js",
+    "src": "_index.ts-loader-Bt0wRZbL.js"
   },
   "_settings-DkJnF7oq.js": {
     "file": "assets/settings-DkJnF7oq.js",
     "name": "settings"
   },
   "src/background/index.ts": {
-    "file": "assets/index.ts-D1CR8g4j.js",
+    "file": "assets/index.ts-xfsaVL5w.js",
     "name": "index.ts",
     "src": "src/background/index.ts",
     "isEntry": true
   },
   "src/content/index.ts": {
-    "file": "assets/index.ts-Cy8FT05_.js",
+    "file": "assets/index.ts-CxWGe0ZC.js",
     "name": "index.ts",
     "src": "src/content/index.ts",
     "isEntry": true,
