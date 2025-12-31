@@ -1,0 +1,9 @@
+---
+alwaysApply: true
+---
+
+# 每次对话完成修改代码文件后，必须自动执行以下构建命令
+
+```bash
+npm run build
+```
