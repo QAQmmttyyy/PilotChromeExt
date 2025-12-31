@@ -78,8 +78,14 @@ function waitForStepCompletion(
     
     // 监听 MPA 导航（完整页面加载）
     const navigationCommitListener = (details: chrome.webNavigation.WebNavigationTransitionCallbackDetails) => {
-      if (details.tabId === tabId && details.frameId === 0 && details.url !== executingUrl) {
-        console.log(`[Pilot Engine] MPA navigation detected: ${executingUrl} -> ${details.url}`);
+      if (details.tabId === tabId && details.frameId === 0) {
+        if (details.url !== executingUrl) {
+          console.log(`[Pilot Engine] MPA navigation detected: ${executingUrl} -> ${details.url}`);
+        } else {
+          // 同 URL 刷新：脚本操作（如表单提交、点击按钮）可能触发页面刷新而不改变 URL
+          // 此时 Main World 脚本被卸载，next()/finish() 信号会丢失，需要通过导航事件检测完成
+          console.log(`[Pilot Engine] Page refresh detected (same URL): ${details.url}`);
+        }
         safeResolve('mpa_navigation');
       }
     };
@@ -114,7 +120,7 @@ function waitForStepCompletion(
     });
     
     const waitingFor = ignoreSpaNavigation 
-      ? 'signal or mpa_navigation (SPA ignored for AI step)'
+      ? 'signal or mpa_navigation (SPA ignored)'
       : 'signal, mpa_navigation, or spa_navigation';
     console.log(`[Pilot Engine] Waiting for step completion: ${waitingFor}`);
   });
