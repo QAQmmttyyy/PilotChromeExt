@@ -58,6 +58,24 @@ window.addEventListener('message', (event) => {
               el.removeAttribute('target');
               console.log('[Pilot] Removed target="_blank" from:', el);
             });
+
+            // 拦截 window.open，改为在当前页面导航
+            // 防止 JS 代码打开新标签页导致 PageAgent 丢失上下文
+            if (!(window as any).__pilotOpenIntercepted) {
+              const originalOpen = window.open;
+              (window as any).__pilotOriginalOpen = originalOpen;
+              (window as any).__pilotOpenIntercepted = true;
+              
+              window.open = function(url?: string | URL, _target?: string, _features?: string): Window | null {
+                if (url) {
+                  const urlStr = url.toString();
+                  console.log('[Pilot] Intercepted window.open, navigating in current page:', urlStr);
+                  location.href = urlStr;
+                }
+                return null;
+              };
+              console.log('[Pilot] window.open intercepted');
+            }
           },
         });
         console.log('[Pilot] PageAgent initialized successfully');
