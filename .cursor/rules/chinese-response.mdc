@@ -1,0 +1,9 @@
+---
+alwaysApply: true
+---
+
+# 语言规则
+
+- 始终使用中文回答用户问题
+- 始终使用中文描述 plan 和任务步骤
+- 代码注释和 commit message 使用英文
