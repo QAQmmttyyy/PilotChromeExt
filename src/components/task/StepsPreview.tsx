@@ -1,5 +1,5 @@
 import { RecordedStep } from '../../lib/types';
-import { StepIcon } from './StepIcon';
+import { StepIcon } from '../shared/StepIcon';
 
 interface StepsPreviewProps {
   steps: RecordedStep[];
