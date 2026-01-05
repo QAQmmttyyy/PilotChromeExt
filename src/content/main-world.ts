@@ -47,6 +47,14 @@ window.addEventListener('message', (event) => {
       const baseURL = config.endpoint ? config.endpoint.replace('/chat/completions', '') : 'https://openrouter.ai/api/v1';
       
       try {
+        // Polyfill console.group/groupEnd in case the page overwrites console and page-agent run failed
+        if (typeof console.group !== 'function') {
+          console.group = (...args: any[]) => console.log('[GROUP]', ...args);
+        }
+        if (typeof console.groupEnd !== 'function') {
+          console.groupEnd = () => {};
+        }
+
         (window as any).pageAgent = new PageAgent({
           apiKey: config.apiKey,
           model: config.model,
