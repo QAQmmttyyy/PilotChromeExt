@@ -1,9 +1,18 @@
 ---
+description: 强制使用中文回答，包括 Plan 和 Thought
+globs: 
 alwaysApply: true
 ---
 
-# 语言规则
+# Language Rules / 语言规则
 
-- 始终使用中文回答用户问题
-- 始终使用中文描述 plan 和任务步骤
-- 代码注释和 commit message 使用英文
+You MUST follow these rules in ALL responses, including "Plan Mode", "Thinking Process", and normal chat.
+
+1. **Response Language**: Always answer in **Chinese (Simplified)**.
+    * This applies to **Plans**, **Step-by-step reasoning**, **Explanations**, and **Chat**.
+    * 即使在 Plan Mode 下，生成的步骤列表必须是中文。
+2. **Code & Commits**:
+    * Code comments MUST be in English.
+    * Commit messages MUST be in English.
+3. **Strict Enforcement**:
+    * If you are about to write a plan in English, STOP and translate it to Chinese.
