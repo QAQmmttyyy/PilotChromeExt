@@ -10,15 +10,17 @@ export function StepsPreview({ steps, compact = false }: StepsPreviewProps) {
   if (steps.length === 0) return null;
 
   return (
-    <div className={compact ? "space-y-0.5" : "space-y-1"}>
+    <div className={`grid grid-cols-[auto_auto_1fr] ${compact ? "gap-y-0.5" : "gap-y-1"}`}>
       {steps.map((step, idx) => (
         <div 
           key={step.id} 
-          className={`flex items-start gap-2 ${compact ? 'py-1' : 'p-2 bg-slate-50 rounded-lg'} text-sm`}
+          className={`grid grid-cols-subgrid col-span-3 gap-x-2 items-start text-sm ${compact ? 'py-1' : 'p-2 bg-slate-50 rounded-lg'}`}
         >
-          <span className="text-slate-400 w-5 text-right shrink-0">{idx + 1}.</span>
-          <StepIcon type={step.type} />
-          <span className="text-slate-700 flex-1 text-xs">
+          <span className="h-4 flex items-center justify-end text-slate-400 text-xs">{idx + 1}.</span>
+          <span className="h-4 flex items-center">
+            <StepIcon type={step.type} />
+          </span>
+          <span className="text-slate-700 text-xs">
             {step.type === 'navigate' ? (
               <span className="font-mono text-blue-600 break-all">{step.url}</span>
             ) : (
