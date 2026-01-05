@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
-  Sparkles, 
   Loader2, 
   XCircle,
-  History
+  History,
+  ArrowUp,
+  Sparkles
 } from 'lucide-react';
 import { AgentState, createAgent, AgentTask, agentTaskStorage } from '../../lib/agent';
 import { settings } from '../../lib/settings';
@@ -15,6 +16,12 @@ import { PromptDisplay } from './PromptDisplay';
 import { StepsPreview } from './StepsPreview';
 import { ScriptPreview } from './ScriptPreview';
 import { TaskHistoryItem } from './TaskHistoryItem';
+import { 
+  PromptInput, 
+  PromptInputTextarea, 
+  PromptInputActions,
+  PromptInputAction 
+} from '@/components/ui/prompt-input';
 
 interface TaskTabProps {
   onOpenSettings: () => void;
@@ -36,7 +43,6 @@ export function TaskTab({ onOpenSettings }: TaskTabProps) {
   const [isExecuting, setIsExecuting] = useState(false);
   const [executeError, setExecuteError] = useState<string | null>(null);
   const agentRef = useRef<ReturnType<typeof createAgent> | null>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     checkApiKey();
@@ -179,7 +185,6 @@ export function TaskTab({ onOpenSettings }: TaskTabProps) {
 
   const handleCopyToInput = (text: string) => {
     setPrompt(text);
-    inputRef.current?.focus();
   };
 
   const isProcessing = ['thinking', 'generating_steps', 'generating_script', 'running'].includes(agentState.status) || isExecuting;
@@ -200,45 +205,48 @@ export function TaskTab({ onOpenSettings }: TaskTabProps) {
 
       <div className="flex-1 overflow-y-auto p-3 space-y-4">
         {/* 输入区域 */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-3 border-b border-slate-100">
-            <textarea
-              ref={inputRef}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="描述你想要自动化的操作，例如：&#10;打开百度搜索 AI，点击第一个结果"
-              className="w-full h-20 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
-              disabled={isProcessing}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.metaKey && !isProcessing) {
-                  handleSubmit();
-                }
-              }}
-            />
-            <div className="flex justify-between items-center mt-2">
-              <div className="text-xs text-slate-400">
-                {currentModel.name} · ⌘+Enter 发送
-              </div>
+        <PromptInput
+          value={prompt}
+          onValueChange={setPrompt}
+          onSubmit={handleSubmit}
+          isLoading={isProcessing}
+          disabled={isProcessing}
+          maxHeight="22.5rem"
+          className="bg-white border-slate-200 shadow-sm rounded-xl [&_textarea]:min-h-[7.5rem]"
+        >
+          <PromptInputTextarea 
+            placeholder="描述你想要自动化的操作，例如：打开百度搜索 AI，点击第一个结果"
+            className="text-sm placeholder:text-slate-400"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && e.metaKey && !isProcessing && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+          />
+          <PromptInputActions className="justify-between w-full">
+            <div className="text-xs text-slate-400 pl-1">
+              {currentModel.name} · ⌘+Enter 发送
+            </div>
+            <PromptInputAction tooltip={isProcessing ? "处理中..." : "创建任务"}>
               <button
-                onClick={handleSubmit}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSubmit();
+                }}
                 disabled={isProcessing || !prompt.trim()}
-                className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg text-sm hover:opacity-90 transition-opacity font-medium disabled:opacity-50 flex items-center gap-1.5"
+                className="p-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center"
               >
                 {isProcessing ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    处理中
-                  </>
+                  <Loader2 size={16} className="animate-spin" />
                 ) : (
-                  <>
-                    <Sparkles size={14} />
-                    生成
-                  </>
+                  <ArrowUp size={16} />
                 )}
               </button>
-            </div>
-          </div>
-        </div>
+            </PromptInputAction>
+          </PromptInputActions>
+        </PromptInput>
 
         {/* 当前任务预览 */}
         {(currentPrompt || agentState.steps.length > 0 || agentState.script) && (
