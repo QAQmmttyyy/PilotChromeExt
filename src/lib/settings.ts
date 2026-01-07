@@ -1,5 +1,3 @@
-// AI 设置存储
-
 import { AIConfig, AVAILABLE_MODELS } from './ai';
 
 const SETTINGS_KEY = 'pilot_settings';
@@ -10,6 +8,7 @@ export interface PilotSettings {
     model: string;
     endpoint: string;
   };
+  agentServerUrl: string;
 }
 
 const DEFAULT_SETTINGS: PilotSettings = {
@@ -17,7 +16,8 @@ const DEFAULT_SETTINGS: PilotSettings = {
     apiKey: '',
     model: AVAILABLE_MODELS[0].id,
     endpoint: 'https://openrouter.ai/api/v1/chat/completions'
-  }
+  },
+  agentServerUrl: 'http://localhost:3000'
 };
 
 export const settings = {
@@ -29,7 +29,8 @@ export const settings = {
         apiKey: stored?.ai?.apiKey ?? DEFAULT_SETTINGS.ai.apiKey,
         model: stored?.ai?.model ?? DEFAULT_SETTINGS.ai.model,
         endpoint: stored?.ai?.endpoint ?? DEFAULT_SETTINGS.ai.endpoint
-      }
+      },
+      agentServerUrl: stored?.agentServerUrl ?? DEFAULT_SETTINGS.agentServerUrl
     };
   },
 
@@ -40,7 +41,8 @@ export const settings = {
         apiKey: newSettings.ai?.apiKey ?? current.ai.apiKey,
         model: newSettings.ai?.model ?? current.ai.model,
         endpoint: newSettings.ai?.endpoint ?? current.ai.endpoint
-      }
+      },
+      agentServerUrl: newSettings.agentServerUrl ?? current.agentServerUrl
     };
     await chrome.storage.local.set({ [SETTINGS_KEY]: merged });
   },
@@ -64,5 +66,12 @@ export const settings = {
   hasApiKey: async (): Promise<boolean> => {
     const s = await settings.get();
     return !!s.ai.apiKey;
+  },
+
+  getServerUrl: async (): Promise<string> => {
+    const s = await settings.get();
+    return s.agentServerUrl;
   }
 };
+
+export const getSettings = settings.get;

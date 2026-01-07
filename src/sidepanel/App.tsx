@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { Zap, FileCode, Settings } from 'lucide-react';
+import { Zap, FileCode, Settings, Bot } from 'lucide-react';
 import { Tabs } from '../components/Tabs';
 import { TaskTab } from '../components/task';
+import { AgentTab } from '../components/agent/AgentTab';
 import { ScriptsTab } from '../components/scripts/ScriptsTab';
 import { SettingsPanel } from '../components/shared/SettingsPanel';
 
 const TAB_ID = {
   TASK: 'task',
+  AGENT: 'agent',
   SCRIPTS: 'scripts',
 } as const;
 
@@ -18,6 +20,7 @@ function App() {
 
   const tabs = [
     { id: TAB_ID.TASK, label: 'Task', icon: <Zap size={14} /> },
+    { id: TAB_ID.AGENT, label: 'Agent', icon: <Bot size={14} /> },
     { id: TAB_ID.SCRIPTS, label: 'Scripts', icon: <FileCode size={14} /> },
   ];
 
@@ -49,6 +52,9 @@ function App() {
       <div className="flex-1 overflow-hidden relative">
         <div className={`absolute inset-0 ${activeTab === TAB_ID.TASK ? '' : 'hidden'}`}>
           <TaskTab onOpenSettings={handleOpenSettings} />
+        </div>
+        <div className={`absolute inset-0 ${activeTab === TAB_ID.AGENT ? '' : 'hidden'}`}>
+          <AgentTab onOpenSettings={handleOpenSettings} />
         </div>
         <div className={`absolute inset-0 ${activeTab === TAB_ID.SCRIPTS ? '' : 'hidden'}`}>
           <ScriptsTab 

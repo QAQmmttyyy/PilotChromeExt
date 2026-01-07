@@ -115,7 +115,7 @@ function PromptInputTextarea({
   disableAutosize = false,
   ...props
 }: PromptInputTextareaProps) {
-  const { value, setValue, maxHeight, disabled, textareaRef } =
+  const { value, setValue, maxHeight, onSubmit, disabled, textareaRef } =
     usePromptInput()
 
   const adjustHeight = (el: HTMLTextAreaElement | null) => {
@@ -155,6 +155,10 @@ function PromptInputTextarea({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault()
+      onSubmit?.()
+    }
     onKeyDown?.(e)
   }
 

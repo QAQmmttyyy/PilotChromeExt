@@ -1,24 +1,29 @@
 import { useState, useEffect } from 'react';
-import { X, Brain } from 'lucide-react';
+import { X, Brain, Server } from 'lucide-react';
 import { settings } from '../../lib/settings';
 import { AVAILABLE_MODELS } from '../../lib/ai';
 
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [apiKey, setApiKey] = useState('');
   const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id);
+  const [serverUrl, setServerUrl] = useState('http://localhost:3000');
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    settings.getAIConfig().then(config => {
-      setApiKey(config.apiKey || '');
-      setSelectedModel(config.model || AVAILABLE_MODELS[0].id);
+    settings.get().then(config => {
+      setApiKey(config.ai.apiKey || '');
+      setSelectedModel(config.ai.model || AVAILABLE_MODELS[0].id);
+      setServerUrl(config.agentServerUrl || 'http://localhost:3000');
     });
   }, []);
 
   const handleSave = async () => {
     setIsSaving(true);
-    await settings.setAIConfig({ apiKey, model: selectedModel });
+    await settings.set({ 
+      ai: { apiKey, model: selectedModel, endpoint: 'https://openrouter.ai/api/v1/chat/completions' },
+      agentServerUrl: serverUrl 
+    });
     setIsSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -34,7 +39,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow-2xl w-[90%] max-w-md max-h-[80vh] overflow-hidden flex flex-col">
         <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-lg font-bold text-slate-800">AI 设置</h2>
+          <h2 className="text-lg font-bold text-slate-800">设置</h2>
           <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
             <X size={20} />
           </button>
@@ -42,6 +47,27 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
         <div className="p-4 space-y-4 overflow-y-auto flex-1">
           <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-2">
+              <Server size={16} />
+              Agent Server URL
+            </label>
+            <input
+              type="url"
+              value={serverUrl}
+              onChange={e => setServerUrl(e.target.value)}
+              placeholder="http://localhost:3000"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              Agent 对话模式使用此 Server（API Key 在 Server 端配置）
+            </p>
+          </div>
+
+          <div className="border-t pt-4">
+            <p className="text-xs text-slate-500 mb-3">
+              以下配置仅用于本地 Task 模式（非 Agent 对话）
+            </p>
+            
             <label className="block text-sm font-medium text-slate-700 mb-1">
               OpenRouter API Key
             </label>
@@ -114,4 +140,3 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
-

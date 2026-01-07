@@ -3,6 +3,7 @@ import * as pageReadyManager from './managers/page-ready';
 import * as recordingManager from './managers/recording';
 import * as workflowManager from './managers/workflow';
 import * as navigationManager from './managers/navigation';
+import { parseScriptToWorkflow } from '../lib/parser';
 
 console.log('Pilot background script loaded');
 
@@ -51,8 +52,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'PILOT_BRIDGE_ACTION') {
     workflowManager.handleBridgeAction(request.action, request.payload, sender);
   } else if (request.type === 'START_WORKFLOW') {
-    const { steps, tabId } = request.payload;
-    workflowManager.prepareAndStartWorkflow(steps, tabId);
+    const { steps, script, tabId } = request.payload;
+    const workflowSteps = steps || (script ? parseScriptToWorkflow(script) : []);
+    workflowManager.prepareAndStartWorkflow(workflowSteps, tabId);
   } else if (request.type === 'RECORDING_STEP') {
     recordingManager.addStepToSession(request.payload);
   } else if (request.type === 'RECORDING_START') {
