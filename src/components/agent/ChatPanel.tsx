@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { type UIMessage } from '@ai-sdk/react';
 import { Loader2 } from 'lucide-react';
 import { getSettings } from '../../lib/settings';
-import { Chat } from './Chat';
+import { Chat } from './chat';
 
 interface ChatPanelProps {
   chatId: string;
