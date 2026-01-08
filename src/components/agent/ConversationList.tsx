@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { MessageSquare, Trash2 } from 'lucide-react';
 import { getSettings } from '../../lib/settings';
 
@@ -14,11 +14,16 @@ interface ConversationListProps {
   selectedId?: string | null;
 }
 
-export function ConversationList({ onSelect, selectedId }: ConversationListProps) {
+export interface ConversationListRef {
+  refresh: () => void;
+}
+
+export const ConversationList = forwardRef<ConversationListRef, ConversationListProps>(
+  function ConversationList({ onSelect, selectedId }, ref) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchConversations = async () => {
+  const fetchConversations = useCallback(async () => {
     try {
       const settings = await getSettings();
       const serverUrl = settings.agentServerUrl || 'http://localhost:3000';
@@ -30,11 +35,15 @@ export function ConversationList({ onSelect, selectedId }: ConversationListProps
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useImperativeHandle(ref, () => ({
+    refresh: fetchConversations,
+  }), [fetchConversations]);
 
   useEffect(() => {
     fetchConversations();
-  }, []);
+  }, [fetchConversations]);
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -95,5 +104,5 @@ export function ConversationList({ onSelect, selectedId }: ConversationListProps
       ))}
     </div>
   );
-}
+});
 

@@ -1,24 +1,33 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Plus, History, Settings } from 'lucide-react';
 import { ChatPanel } from './ChatPanel';
-import { ConversationList } from './ConversationList';
+import { ConversationList, ConversationListRef } from './ConversationList';
 
 interface AgentTabProps {
   onOpenSettings?: () => void;
 }
 
 export function AgentTab({ onOpenSettings }: AgentTabProps) {
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [chatId, setChatId] = useState<string>(crypto.randomUUID());
+  const [isNewChat, setIsNewChat] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
+  const conversationListRef = useRef<ConversationListRef>(null);
 
   const handleNewChat = () => {
-    setConversationId(null);
+    setChatId(crypto.randomUUID());
+    setIsNewChat(true);
     setShowHistory(false);
   };
 
   const handleSelectConversation = (id: string) => {
-    setConversationId(id);
+    setChatId(id);
+    setIsNewChat(false);
     setShowHistory(false);
+  };
+
+  const handleConversationCreated = () => {
+    setIsNewChat(false);
+    conversationListRef.current?.refresh();
   };
 
   return (
@@ -57,13 +66,16 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
       <div className="flex-1 overflow-hidden">
         {showHistory ? (
           <ConversationList
+            ref={conversationListRef}
             onSelect={handleSelectConversation}
-            selectedId={conversationId}
+            selectedId={chatId}
           />
         ) : (
           <ChatPanel 
-            conversationId={conversationId}
-            onConversationCreated={setConversationId}
+            key={chatId}
+            chatId={chatId}
+            isNewChat={isNewChat}
+            onConversationCreated={handleConversationCreated}
           />
         )}
       </div>

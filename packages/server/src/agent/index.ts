@@ -11,9 +11,6 @@ const tools = {
 
 export async function streamAgentResponse(messages: UIMessage[]) {
   const modelMessages = convertToModelMessages(messages);
-  console.log('[Agent] Input messages count:', modelMessages.length);
-  console.log('[Agent] Input messages:', JSON.stringify(modelMessages, null, 2).slice(0, 3000));
-  console.log('[Agent] System prompt length:', AGENT_SYSTEM_PROMPT.length);
   
   const result = streamText({
     model: getModel(),
