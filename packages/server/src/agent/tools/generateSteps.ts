@@ -1,15 +1,17 @@
-import { tool, generateText } from 'ai';
+import { tool, generateObject } from 'ai';
 import { z } from 'zod';
 import { STEPS_GENERATION_PROMPT } from '../prompts';
 import { getModel } from '../../lib/config';
 
 const StepSchema = z.object({
-  type: z.enum(['navigate', 'ai_step']),
-  url: z.string().optional(),
-  value: z.string().optional(),
+  type: z.enum(['navigate', 'ai_step']).describe('步骤类型：navigate 为导航，ai_step 为 AI 操作'),
+  url: z.string().optional().describe('导航目标 URL，navigate 类型必填'),
+  value: z.string().optional().describe('操作指令描述，ai_step 类型必填'),
 });
 
-const StepsArraySchema = z.array(StepSchema);
+const StepsResponseSchema = z.object({
+  steps: z.array(StepSchema).describe('自动化任务的步骤序列'),
+});
 
 export const generateStepsTool = tool({
   description: `将用户的自动化任务分解为可执行的步骤序列。
@@ -21,25 +23,18 @@ export const generateStepsTool = tool({
   }),
   execute: async ({ task }) => {
     try {
-      const { text } = await generateText({
+      console.log('[generateSteps] Starting with task:', task);
+      
+      const { object } = await generateObject({
         model: getModel(),
+        schema: StepsResponseSchema,
         system: STEPS_GENERATION_PROMPT,
         prompt: task,
       });
 
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        return {
-          success: false,
-          steps: [],
-          error: 'AI 未返回有效的步骤 JSON',
-        };
-      }
+      console.log('[generateSteps] Generated object:', JSON.stringify(object, null, 2));
 
-      const parsed = JSON.parse(jsonMatch[0]);
-      const validated = StepsArraySchema.parse(parsed);
-
-      const steps = validated.map((step, index) => ({
+      const steps = object.steps.map((step, index) => ({
         id: `step-${index + 1}`,
         timestamp: Date.now(),
         type: step.type as 'navigate' | 'ai_step',
@@ -53,10 +48,14 @@ export const generateStepsTool = tool({
         steps,
       };
     } catch (error) {
+      console.error('[generateSteps] Error:', error);
+      const errorMessage = error instanceof Error 
+        ? `${error.name}: ${error.message}` 
+        : 'Unknown error';
       return {
         success: false,
         steps: [],
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: errorMessage,
       };
     }
   },

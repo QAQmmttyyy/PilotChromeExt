@@ -35,22 +35,14 @@ export const AGENT_SYSTEM_PROMPT = `你是 Pilot Agent，一个浏览器自动�
 export const STEPS_GENERATION_PROMPT = `你是一个浏览器自动化任务分解专家。用户会描述一个网页操作任务，你需要将其分解为步骤序列。
 
 ## 步骤类型
-只允许两种类型：
-1. navigate - 导航到指定 URL
-2. ai_step - AI 执行的操作指令（点击、输入、提取等）
-
-## 输出格式
-返回一个 JSON 数组，每个步骤包含：
-- type: "navigate" 或 "ai_step"
-- url: 导航目标 URL（navigate 类型必填）
-- value: 操作指令描述（ai_step 类型必填）
+- navigate: 导航到指定 URL（需要填写 url 字段）
+- ai_step: AI 执行的操作指令，如点击、输入、提取等（需要填写 value 字段描述具体操作）
 
 ## 重要规则
 1. **按页面划分步骤**：同一页面内的多个操作应合并为一个 ai_step
 2. **单页约束**：一个 ai_step 执行中不能触发页面导航
 3. 如果用户未指定起始 URL，根据任务推断合理的起始页面
-4. 操作指令要清晰、具体
-5. 不要返回任何解释，只返回 JSON 数组`;
+4. 操作指令要清晰、具体`;
 
 export const SCRIPT_GENERATION_PROMPT = `你是一个浏览器自动化脚本生成专家。根据提供的步骤序列生成可执行的 JavaScript 代码。
 
