@@ -4,19 +4,14 @@ import { parseScriptToWorkflow } from '../../lib/parser';
 import { generateScriptStream, cleanGeneratedCode, buildUserMessage, buildRecordingContext, AVAILABLE_MODELS, ChatMessage, getModelInfo } from '../../lib/ai';
 import { settings } from '../../lib/settings';
 import { RecordingSession, RecordedStep } from '../../lib/types';
-import { SettingsPanel } from '../shared/SettingsPanel';
 import { SEED_SCRIPT } from './utils';
 import { ScriptList } from './ScriptList';
 import { ScriptEditor } from './ScriptEditor';
 
 export function ScriptsTab({ 
-  onOpenSettings, 
-  showSettings,
-  onCloseSettings 
+  onOpenSettings 
 }: { 
   onOpenSettings: () => void;
-  showSettings: boolean;
-  onCloseSettings: () => void;
 }) {
   const [view, setView] = useState<'list' | 'editor'>('list');
   const [scripts, setScripts] = useState<Script[]>([]);
@@ -377,8 +372,6 @@ export function ScriptsTab({
 
   return (
     <div className="h-full flex flex-col">
-      {showSettings && <SettingsPanel onClose={onCloseSettings} />}
-
       {view === 'list' ? (
         <ScriptList
           scripts={scripts}
@@ -395,7 +388,6 @@ export function ScriptsTab({
           onBack={() => { loadScripts(); setView('list'); }}
           onRun={() => handleRun(currentScript)}
           onSave={handleSave}
-          onOpenSettings={onOpenSettings}
           saveStatus={saveStatus}
           codeUpdateStatus={codeUpdateStatus}
           // Chat props

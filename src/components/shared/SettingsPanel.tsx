@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Brain, Server } from 'lucide-react';
+import { X, Server, Star } from 'lucide-react';
 import { settings } from '../../lib/settings';
 import { AVAILABLE_MODELS } from '../../lib/ai';
 
@@ -13,7 +13,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     settings.get().then(config => {
       setApiKey(config.ai.apiKey || '');
-      setSelectedModel(config.ai.model || AVAILABLE_MODELS[0].id);
+      // Validate that saved model exists in current list
+      const savedModel = config.ai.model;
+      const modelExists = AVAILABLE_MODELS.some(m => m.id === savedModel);
+      setSelectedModel(modelExists ? savedModel : AVAILABLE_MODELS[0].id);
       setServerUrl(config.agentServerUrl || 'http://localhost:3000');
     });
   }, []);
@@ -29,15 +32,18 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const groupedModels = AVAILABLE_MODELS.reduce((acc, model) => {
-    if (!acc[model.provider]) acc[model.provider] = [];
-    acc[model.provider].push(model);
-    return acc;
-  }, {} as Record<string, typeof AVAILABLE_MODELS>);
+  const recommendedModels = AVAILABLE_MODELS.filter(m => m.recommended);
+  const otherModels = AVAILABLE_MODELS.filter(m => !m.recommended);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-2xl w-[90%] max-w-md max-h-[80vh] overflow-hidden flex flex-col">
+    <div 
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-xl shadow-2xl w-[90%] max-w-md max-h-[80vh] overflow-hidden flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-bold text-slate-800">设置</h2>
           <button onClick={onClose} className="p-1 hover:bg-slate-100 rounded">
@@ -85,44 +91,64 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">AI 模型</label>
-            <div className="space-y-3">
-              {Object.entries(groupedModels).map(([provider, models]) => (
-                <div key={provider}>
-                  <div className="text-xs font-semibold text-slate-400 mb-1">{provider}</div>
-                  <div className="space-y-1">
-                    {models.map(model => (
-                      <label
-                        key={model.id}
-                        className={`flex items-center p-2 rounded-lg border cursor-pointer transition-colors ${
-                          selectedModel === model.id
-                            ? 'border-purple-500 bg-purple-50'
-                            : 'border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="model"
-                          value={model.id}
-                          checked={selectedModel === model.id}
-                          onChange={() => setSelectedModel(model.id)}
-                          className="sr-only"
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-medium text-slate-700">{model.name}</span>
-                            {model.thinking && <Brain size={12} className="text-purple-500" />}
-                            <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded">{model.context}</span>
-                          </div>
-                          <div className="text-xs text-slate-500">{model.description}</div>
-                        </div>
-                        {selectedModel === model.id && (
-                          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                        )}
-                      </label>
-                    ))}
-                  </div>
+            <div className="space-y-4">
+              {/* 推荐模型 */}
+              <div>
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 mb-2">
+                  <Star size={12} className="fill-emerald-500" />
+                  推荐模型
                 </div>
-              ))}
+                <div className="flex flex-wrap gap-2">
+                  {recommendedModels.map(model => (
+                    <label
+                      key={model.id}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-colors text-sm ${
+                        selectedModel === model.id
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-200 hover:border-emerald-300 text-slate-600'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="model"
+                        value={model.id}
+                        checked={selectedModel === model.id}
+                        onChange={() => setSelectedModel(model.id)}
+                        className="sr-only"
+                      />
+                      <Star size={10} className="text-emerald-500 fill-emerald-500" />
+                      {model.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* 其他模型 */}
+              <div>
+                <div className="text-xs font-semibold text-slate-400 mb-2">其他模型</div>
+                <div className="flex flex-wrap gap-2">
+                  {otherModels.map(model => (
+                    <label
+                      key={model.id}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-colors text-sm ${
+                        selectedModel === model.id
+                          ? 'border-purple-500 bg-purple-50 text-purple-700'
+                          : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="model"
+                        value={model.id}
+                        checked={selectedModel === model.id}
+                        onChange={() => setSelectedModel(model.id)}
+                        className="sr-only"
+                      />
+                      {model.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>

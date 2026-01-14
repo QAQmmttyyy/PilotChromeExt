@@ -11,7 +11,6 @@ interface ScriptEditorProps {
   onBack: () => void;
   onRun: () => void;
   onSave: () => void;
-  onOpenSettings: () => void;
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
   codeUpdateStatus: 'idle' | 'updated';
   // Chat props
@@ -46,7 +45,6 @@ export function ScriptEditor({
   onBack,
   onRun,
   onSave,
-  onOpenSettings,
   saveStatus,
   codeUpdateStatus,
   // Chat props
@@ -82,7 +80,6 @@ export function ScriptEditor({
         onBack={onBack}
         onRun={onRun}
         onSave={onSave}
-        onOpenSettings={onOpenSettings}
         saveStatus={saveStatus}
       />
 

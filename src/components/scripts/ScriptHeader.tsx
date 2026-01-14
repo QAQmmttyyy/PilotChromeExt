@@ -1,4 +1,4 @@
-import { ArrowLeft, Play, Save, Settings } from 'lucide-react';
+import { ArrowLeft, Play, Save } from 'lucide-react';
 import { Script } from '../../lib/storage';
 
 interface ScriptHeaderProps {
@@ -7,7 +7,6 @@ interface ScriptHeaderProps {
   onBack: () => void;
   onRun: () => void;
   onSave: () => void;
-  onOpenSettings: () => void;
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
 }
 
@@ -17,7 +16,6 @@ export function ScriptHeader({
   onBack,
   onRun,
   onSave,
-  onOpenSettings,
   saveStatus
 }: ScriptHeaderProps) {
   return (
@@ -33,13 +31,6 @@ export function ScriptHeader({
         />
       </div>
       <div className="flex gap-2">
-        <button
-          onClick={onOpenSettings}
-          className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
-          title="设置"
-        >
-          <Settings size={18} />
-        </button>
         <button
           onClick={onRun}
           className="px-3 py-1.5 text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center gap-1.5 text-sm font-medium"

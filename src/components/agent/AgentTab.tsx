@@ -1,13 +1,9 @@
 import { useState, useRef } from 'react';
-import { Plus, History, Settings } from 'lucide-react';
+import { Plus, History } from 'lucide-react';
 import { ChatPanel } from './ChatPanel';
 import { ConversationList, ConversationListRef } from './ConversationList';
 
-interface AgentTabProps {
-  onOpenSettings?: () => void;
-}
-
-export function AgentTab({ onOpenSettings }: AgentTabProps) {
+export function AgentTab() {
   const [chatId, setChatId] = useState<string>(crypto.randomUUID());
   const [isNewChat, setIsNewChat] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
@@ -53,14 +49,6 @@ export function AgentTab({ onOpenSettings }: AgentTabProps) {
             历史
           </button>
         </div>
-        {onOpenSettings && (
-          <button
-            onClick={onOpenSettings}
-            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
-          >
-            <Settings size={14} />
-          </button>
-        )}
       </div>
 
       <div className="flex-1 overflow-hidden">

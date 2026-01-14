@@ -54,21 +54,15 @@ function App() {
           <TaskTab onOpenSettings={handleOpenSettings} />
         </div>
         <div className={`absolute inset-0 ${activeTab === TAB_ID.AGENT ? '' : 'hidden'}`}>
-          <AgentTab onOpenSettings={handleOpenSettings} />
+          <AgentTab />
         </div>
         <div className={`absolute inset-0 ${activeTab === TAB_ID.SCRIPTS ? '' : 'hidden'}`}>
-          <ScriptsTab 
-            onOpenSettings={handleOpenSettings}
-            showSettings={showSettings}
-            onCloseSettings={handleCloseSettings}
-          />
+          <ScriptsTab onOpenSettings={handleOpenSettings} />
         </div>
       </div>
 
-      {/* Global Settings Modal (for Task tab) */}
-      {showSettings && activeTab === TAB_ID.TASK && (
-        <SettingsPanel onClose={handleCloseSettings} />
-      )}
+      {/* Global Settings Modal */}
+      {showSettings && <SettingsPanel onClose={handleCloseSettings} />}
     </div>
   );
 }

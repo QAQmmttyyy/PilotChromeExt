@@ -8,39 +8,39 @@ export interface AIModel {
   provider: string;
   context: string;
   description: string;
-  thinking?: boolean; // 是否支持思考模式
+  thinking?: boolean;
+  recommended?: boolean;
 }
 
-// OpenRouter 最新可用模型（2025年12月）
+// OpenRouter 最新可用模型（2026年1月）
 export const AVAILABLE_MODELS: AIModel[] = [
-  // Anthropic Claude 系列（最新）
-  { id: 'anthropic/claude-opus-4.5', name: 'Claude Opus 4.5', provider: 'Anthropic', context: '200K', description: '最强旗舰', thinking: true },
-  { id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5', provider: 'Anthropic', context: '1M', description: '最新推荐', thinking: true },
-  { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5', provider: 'Anthropic', context: '200K', description: '快速高效', thinking: true },
-  { id: 'anthropic/claude-opus-4.1', name: 'Claude Opus 4.1', provider: 'Anthropic', context: '200K', description: '编码推理强', thinking: true },
-  { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', provider: 'Anthropic', context: '1M', description: '性价比高', thinking: true },
-  { id: 'anthropic/claude-3.7-sonnet:thinking', name: 'Claude 3.7 Sonnet', provider: 'Anthropic', context: '200K', description: '思考模式', thinking: true },
-  { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', context: '200K', description: '经典稳定' },
-  { id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku', provider: 'Anthropic', context: '200K', description: '极速便宜' },
+  // ========== 推荐模型（快速高效） ==========
+  { id: 'openai/gpt-4.1-mini', name: 'GPT-4.1 Mini', provider: 'OpenAI', context: '1M', description: '快速便宜', recommended: true },
+  { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5', provider: 'Anthropic', context: '200K', description: '极速响应', thinking: true, recommended: true },
+  { id: 'google/gemini-3-flash-preview', name: 'Gemini 3 Flash', provider: 'Google', context: '1M', description: '超快推理', thinking: true, recommended: true },
+  { id: 'deepseek/deepseek-v3.2', name: 'DeepSeek V3.2', provider: 'DeepSeek', context: '164K', description: '性价比王', thinking: true, recommended: true },
+  { id: 'x-ai/grok-4-fast', name: 'Grok 4 Fast', provider: 'xAI', context: '2M', description: '工具调用强', thinking: true, recommended: true },
+
+  // ========== 其他模型 ==========
+  // Qwen 系列
+  { id: 'qwen/qwen3-235b-a22b', name: 'Qwen3 235B', provider: 'Qwen', context: '262K', description: '中文优化' },
   
-  // OpenAI GPT 系列（最新）
-  { id: 'openai/gpt-5.2', name: 'GPT-5.2', provider: 'OpenAI', context: '400K', description: '最新旗舰', thinking: true },
-  { id: 'openai/gpt-5.2-pro', name: 'GPT-5.2 Pro', provider: 'OpenAI', context: '400K', description: '深度推理', thinking: true },
-  { id: 'openai/gpt-5.2-chat', name: 'GPT-5.2 Chat', provider: 'OpenAI', context: '128K', description: '快速对话' },
-  { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'OpenAI', context: '128K', description: '多模态' },
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI', context: '128K', description: '便宜实惠' },
-  { id: 'openai/o3-mini', name: 'O3 Mini', provider: 'OpenAI', context: '200K', description: '推理模型', thinking: true },
+  // OpenAI GPT 系列
+  { id: 'openai/gpt-4.1', name: 'GPT-4.1', provider: 'OpenAI', context: '1M', description: '编码能力强' },
+  { id: 'openai/gpt-4.1-nano', name: 'GPT-4.1 Nano', provider: 'OpenAI', context: '1M', description: '极速便宜' },
+  
+  // xAI Grok 系列
+  { id: 'x-ai/grok-4', name: 'Grok 4', provider: 'xAI', context: '256K', description: '深度推理', thinking: true },
+  { id: 'x-ai/grok-code-fast-1', name: 'Grok Code Fast', provider: 'xAI', context: '256K', description: '编程专精', thinking: true },
+  
+  // Anthropic Claude 系列
+  { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic', context: '200K', description: '经典稳定' },
+  { id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5', provider: 'Anthropic', context: '1M', description: '均衡之选', thinking: true },
+  { id: 'anthropic/claude-opus-4.5', name: 'Claude Opus 4.5', provider: 'Anthropic', context: '200K', description: '深度推理', thinking: true },
   
   // Google Gemini 系列
-  { id: 'google/gemini-2.5-pro-preview', name: 'Gemini 2.5 Pro', provider: 'Google', context: '1M', description: '最强多模态', thinking: true },
-  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'Google', context: '1M', description: '快速免费' },
-  
-  // DeepSeek 系列
-  { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1', provider: 'DeepSeek', context: '64K', description: '推理能力强', thinking: true },
-  { id: 'deepseek/deepseek-chat', name: 'DeepSeek Chat', provider: 'DeepSeek', context: '64K', description: '极致性价比' },
-  
-  // Mistral 系列
-  { id: 'mistralai/devstral-2512', name: 'Devstral 2', provider: 'Mistral', context: '256K', description: '编程专精' },
+  { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'Google', context: '1M', description: '多模态强', thinking: true },
+  { id: 'google/gemini-3-pro-preview', name: 'Gemini 3 Pro', provider: 'Google', context: '1M', description: '最强多模态', thinking: true },
 ];
 
 export interface AIConfig {
