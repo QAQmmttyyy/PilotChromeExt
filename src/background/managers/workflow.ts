@@ -19,6 +19,45 @@ export function getWorkflow(tabId: number) {
   return workflows.get(tabId);
 }
 
+// Create PageAgent on demand before executing AI steps
+async function createPageAgentOnDemand(tabId: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      window.removeEventListener('message', messageListener);
+      chrome.runtime.onMessage.removeListener(listener);
+      reject(new Error('PageAgent creation timed out'));
+    }, 10000);
+
+    const listener = (message: any) => {
+      if (message.type === 'PAGE_AGENT_CREATE_RESULT') {
+        clearTimeout(timeout);
+        chrome.runtime.onMessage.removeListener(listener);
+        if (message.success) {
+          console.log('[Pilot Engine] PageAgent created successfully');
+          resolve();
+        } else {
+          reject(new Error(message.error || 'Failed to create PageAgent'));
+        }
+      }
+    };
+
+    const messageListener = () => {};
+
+    chrome.runtime.onMessage.addListener(listener);
+
+    // Inject page-agent-init.js into the page
+    chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['page-agent-init.js'],
+      world: 'MAIN'
+    }).catch(err => {
+      clearTimeout(timeout);
+      chrome.runtime.onMessage.removeListener(listener);
+      reject(err);
+    });
+  });
+}
+
 function waitForStepCompletion(
   tabId: number,
   executingUrl: string,
@@ -191,6 +230,12 @@ async function executeCurrentStep(tabId: number) {
     const beforeExecuteTab = await chrome.tabs.get(tabId);
     workflow.executingUrl = beforeExecuteTab.url;
     console.log(`[Pilot Engine] Page ready. Current URL: ${workflow.executingUrl}`);
+
+    // ===== Phase 2.5: 如果是 AI 步骤，先创建 PageAgent =====
+    if (step.isAiStep) {
+      console.log(`[Pilot Engine] AI step detected, creating PageAgent on demand...`);
+      await createPageAgentOnDemand(tabId);
+    }
 
     // ===== Phase 3: 脚本安全检查 =====
     const data = workflow.data;

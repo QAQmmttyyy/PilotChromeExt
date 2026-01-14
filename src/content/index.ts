@@ -64,6 +64,13 @@ window.addEventListener('message', (event) => {
     pageAgentReady = true;
     sendReadyEvent('PAGE_AGENT_READY');
     checkFullyReady();
+  } else if (event.data.type === 'PAGE_AGENT_CREATE_RESULT') {
+    console.log('[Pilot] PageAgent create result:', event.data.success);
+    chrome.runtime.sendMessage({
+      type: 'PAGE_AGENT_CREATE_RESULT',
+      success: event.data.success,
+      error: event.data.error
+    }).catch(() => {});
   }
 });
 
@@ -234,6 +241,14 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   } else if (request.type === 'RESET_AGENT') {
     console.log('[Pilot] Received RESET_AGENT request');
     syncAIConfig();
+    return true;
+  } else if (request.type === 'DISPOSE_PAGE_AGENT') {
+    console.log('[Pilot] Received DISPOSE_PAGE_AGENT request');
+    window.postMessage({
+      source: 'PILOT_ISOLATED',
+      type: 'DISPOSE_PAGE_AGENT'
+    }, '*');
+    sendResponse({ forwarded: true });
     return true;
   }
 });

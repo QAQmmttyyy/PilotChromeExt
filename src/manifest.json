@@ -33,7 +33,7 @@
   "web_accessible_resources": [
     {
       "matches": ["<all_urls>"],
-      "resources": ["main-world.js"]
+      "resources": ["main-world.js", "page-agent-init.js"]
     }
   ],
   "declarative_net_request": {

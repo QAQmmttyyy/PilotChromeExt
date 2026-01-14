@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "npm run dev -w @pilot/server",
-    "build": "tsc && vite build && vite build -c vite.config.main-world.ts",
+    "build": "tsc && vite build && vite build -c vite.config.main-world.ts && vite build -c vite.config.page-agent-init.ts",
     "build:server": "npm run build -w @pilot/server",
     "preview": "vite preview",
     "db:generate": "npm run db:generate -w @pilot/server",
