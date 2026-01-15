@@ -1,7 +1,7 @@
 export interface WorkflowStep {
   id: string;
   name: string;
-  url?: string; // 如果提供，引擎会先跳转到此 URL
+  url?: string; // Only used for explicit "navigate" steps
   waitId?: number; // 内部使用：等待的 Tab ID
   code: string; // 此步骤要执行的代码
   isAiStep?: boolean; // AI step 标记，用于控制 SPA 导航行为

@@ -20,6 +20,7 @@ export function parseScriptToWorkflow(scriptCode: string): WorkflowStep[] {
   let match;
   let lastIndex = 0;
   let currentStep: Partial<WorkflowStep> | null = null;
+  let currentStepHeaderUrl: string | undefined;
   let preamble = ''; // 前置代码（第一个 STEP 之前的代码）
 
   // 如果没有找到任何标记，这就只是一个普通脚本
@@ -44,18 +45,26 @@ export function parseScriptToWorkflow(scriptCode: string): WorkflowStep[] {
       const stepCode = scriptCode.substring(lastIndex, match.index).trim();
       // 将前置代码附加到步骤代码前（如果有）
       currentStep.code = preamble ? `${preamble}\n\n${stepCode}` : stepCode;
-      currentStep.isAiStep = stepCode.includes('pageAgent.execute');
+      const isAiStep = stepCode.includes('pageAgent.execute');
+      currentStep.isAiStep = isAiStep;
+      // Only "navigate" steps should carry url, other steps keep current page.
+      if (!isAiStep && currentStep.name === 'navigate') {
+        currentStep.url = currentStepHeaderUrl;
+      } else {
+        currentStep.url = undefined;
+      }
       steps.push(currentStep as WorkflowStep);
     }
 
     // 2. 开启新步骤
     const name = match[1].trim();
     const url = match[2]; // Capturing group 2 is the URL inside parens
+    currentStepHeaderUrl = url;
 
     currentStep = {
       id: `step-${steps.length + 1}`,
       name,
-      url,
+      url: undefined,
       code: ''
     };
     
@@ -66,7 +75,13 @@ export function parseScriptToWorkflow(scriptCode: string): WorkflowStep[] {
   if (currentStep) {
     const stepCode = scriptCode.substring(lastIndex).trim();
     currentStep.code = preamble ? `${preamble}\n\n${stepCode}` : stepCode;
-    currentStep.isAiStep = stepCode.includes('pageAgent.execute');
+    const isAiStep = stepCode.includes('pageAgent.execute');
+    currentStep.isAiStep = isAiStep;
+    if (!isAiStep && currentStep.name === 'navigate') {
+      currentStep.url = currentStepHeaderUrl;
+    } else {
+      currentStep.url = undefined;
+    }
     steps.push(currentStep as WorkflowStep);
   }
 

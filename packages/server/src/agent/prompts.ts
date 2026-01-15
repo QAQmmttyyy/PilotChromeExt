@@ -51,8 +51,8 @@ export const SCRIPT_GENERATION_PROMPT = `你是一个浏览器自动化脚本生
 1. **只输出纯 JavaScript 代码**：禁止 TypeScript。
 2. **只输出代码**：禁止解释、禁止 markdown 代码块。输出必须以 \`// === STEP:\` 开头。
 3. **多步骤格式**：
-   \`// === STEP: 名称 (https://目标URL) ===\`
-   navigate 步骤的 URL 放在括号中。
+   - navigate 步骤：\`// === STEP: navigate (https://目标URL) ===\`
+   - ai_step 步骤：\`// === STEP: AI Step ===\`（不要在括号中写 URL）
 
 4. **AI Step 代码模板**：
 \`\`\`

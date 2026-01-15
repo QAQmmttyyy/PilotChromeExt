@@ -19,6 +19,21 @@ export function getWorkflow(tabId: number) {
   return workflows.get(tabId);
 }
 
+function normalizeUrlForCompare(url?: string) {
+  if (!url) return '';
+  try {
+    const u = new URL(url);
+    // Ignore hash to avoid false mismatches
+    let pathname = u.pathname || '/';
+    // Normalize trailing slash except for root
+    if (pathname.length > 1 && pathname.endsWith('/')) pathname = pathname.slice(0, -1);
+    return `${u.origin}${pathname}${u.search}`;
+  } catch {
+    // Best-effort fallback
+    return url.replace(/#.*$/, '').replace(/\/$/, '');
+  }
+}
+
 // Create PageAgent on demand before executing AI steps
 async function createPageAgentOnDemand(tabId: number): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -212,9 +227,14 @@ async function executeCurrentStep(tabId: number) {
   try {
     // ===== Phase 1: 导航（如果需要）=====
     // 注意：workflow 开始前已经确保页面就绪，所以只有导航时才需要等待
-    if (step.url) {
+    // IMPORTANT: Only explicit "navigate" steps should trigger navigation.
+    // Other steps (including AI steps) must not force-return to step.url,
+    // otherwise we can jump away from the actual result page produced by previous actions.
+    if (step.name === 'navigate' && step.url) {
       const currentTab = await chrome.tabs.get(tabId);
-      if (currentTab.url !== step.url) {
+      const currentUrl = normalizeUrlForCompare(currentTab.url);
+      const targetUrl = normalizeUrlForCompare(step.url);
+      if (currentUrl !== targetUrl) {
         console.log(`[Pilot Engine] Navigating to: ${step.url}`);
         await chrome.tabs.update(tabId, { url: step.url });
 

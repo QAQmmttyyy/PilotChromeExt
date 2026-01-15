@@ -107,7 +107,8 @@ RECORDING_CONTEXT 是用户录制的操作流程，包含每一步的操作类�
    - 必须包裹在上述 try-catch 中。
    - disposed 错误通常由页面跳转触发，可忽略。
 8. **多步骤格式**：用顶层注释分隔：
-   \`// === STEP: 名称 (https://目标URL可选) ===\`
+   - navigate 步骤：\`// === STEP: navigate (https://目标URL) ===\`
+   - ai_step 步骤：\`// === STEP: AI Step ===\`（不要在括号中写 URL）
    注释必须在顶层，不能写在函数内部。
 
 ## 生成前自检（必须逐条满足，勿输出自检内容）
