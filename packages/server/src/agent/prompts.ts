@@ -77,8 +77,31 @@ export const SCRIPT_GENERATION_PROMPT = `你是一个浏览器自动化脚本生
 
 6. **最后一步**使用 \`finish()\` 而不是 \`next()\`
 
-7. **跨步骤数据传递**：
-   - \`pageAgent.execute()\` 返回 \`{ success, data, history }\`
-   - 传递数据给下一步：\`window.Pilot.workflow.next({ key: value })\`
-   - 读取上一步传递的数据：\`window.PilotData.key\``;
+7. **跨步骤数据传递（必须严格遵守）**：
+   
+   **返回值结构**：
+   - \`pageAgent.execute()\` 返回 \`{ success: boolean, data: any, history: string[] }\`
+   - **success=true**：操作成功，data 包含提取的数据
+   - **success=false**：操作失败，data 是错误信息
+   
+   **必须检查 success**：
+   \`\`\`
+   const result = await window.pageAgent.execute("指令");
+   if (!result.success) {
+     return window.Pilot.workflow.fail(result.data || '操作失败');
+   }
+   \`\`\`
+   
+   **数据提取和传递**：
+   \`\`\`
+   // 提取数据
+   const result = await window.pageAgent.execute("获取页面标题");
+   if (!result.success) return window.Pilot.workflow.fail(result.data);
+   
+   // 传递给下一步
+   window.Pilot.workflow.next({ pageTitle: result.data });
+   
+   // 下一步读取数据
+   const title = window.PilotData?.pageTitle || '';
+   \`\`\``;
 

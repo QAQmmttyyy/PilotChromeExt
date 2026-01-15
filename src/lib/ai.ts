@@ -106,7 +106,57 @@ RECORDING_CONTEXT 是用户录制的操作流程，包含每一步的操作类�
    - 引擎保证就绪后才执行，无需轮询等待。
    - 必须包裹在上述 try-catch 中。
    - disposed 错误通常由页面跳转触发，可忽略。
-8. **多步骤格式**：用顶层注释分隔：
+8. **数据提取与传递（关键规则）**：
+   
+   **返回值处理**：
+   - \`pageAgent.execute()\` 返回 \`{ success: boolean, data: any, history: string[] }\`
+   - **必须先检查 success**：如果为 false，data 是错误信息，必须调用 fail
+   - **成功时**：data 包含提取的数据或操作结果
+   
+   **正确的提取模式**：
+   \`\`\`
+   const result = await window.pageAgent.execute("获取页面标题");
+   if (!result.success) {
+     return window.Pilot.workflow.fail(result.data || '提取失败');
+   }
+   // 只有检查通过后才能使用 result.data
+   const title = result.data;
+   window.Pilot.workflow.next({ pageTitle: title });
+   \`\`\`
+   
+   **多个数据提取**：
+   \`\`\`
+   const result = await window.pageAgent.execute("提取商品名称和价格");
+   if (!result.success) return window.Pilot.workflow.fail(result.data);
+   // data 可能是对象或 JSON 字符串，需要处理
+   const info = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+   window.Pilot.workflow.next({ 
+     productName: info.name || '',
+     productPrice: info.price || ''
+   });
+   \`\`\`
+   
+   **使用上一步的数据**：
+   \`\`\`
+   const title = window.PilotData?.pageTitle || '';
+   if (!title) {
+     return window.Pilot.workflow.fail('缺少必需的数据：pageTitle');
+   }
+   await window.pageAgent.execute(\`在搜索框中输入: "\${title}"\`);
+   \`\`\`
+   
+   **错误的模式（禁止）**：
+   \`\`\`
+   // 错误：未检查 success
+   const result = await window.pageAgent.execute("获取标题");
+   window.Pilot.workflow.next({ title: result.data }); // 可能传递错误信息
+   
+   // 错误：未处理空值
+   const title = window.PilotData.pageTitle; // 可能 undefined
+   await window.pageAgent.execute(\`输入: \${title}\`); // 可能是 "输入: undefined"
+   \`\`\`
+   
+9. **多步骤格式**：用顶层注释分隔：
    - navigate 步骤：\`// === STEP: navigate (https://目标URL) ===\`
    - ai_step 步骤：\`// === STEP: AI Step ===\`（不要在括号中写 URL）
    注释必须在顶层，不能写在函数内部。
@@ -118,6 +168,11 @@ RECORDING_CONTEXT 是用户录制的操作流程，包含每一步的操作类�
 - 是否有 setTimeout 作为等待？（必须为否；仅允许作为 waitFor 的超时机制）
 - 是否所有分支最终会 finish/next/fail 之一？
 - 是否在 PAGE_CONTEXT 存在时优先使用其中的元素/属性？
+- **数据提取是否正确**：
+  * 每个 \`pageAgent.execute()\` 调用后是否立即检查 \`success\`？
+  * 是否在 success=false 时调用 \`fail()\` 并 return？
+  * 是否只在 success=true 时使用 \`result.data\`？
+  * 使用 \`window.PilotData\` 时是否有默认值或空值检查？
 
 ## 输出
 

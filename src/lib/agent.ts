@@ -109,24 +109,59 @@ const SCRIPT_SYSTEM_PROMPT = `你是一个浏览器自动化脚本生成专家�
 
 6. **最后一步**使用 \`finish()\` 而不是 \`next()\`
 
-7. **跨步骤数据传递**：
-   - \`pageAgent.execute()\` 返回 \`{ success, data, history }\`
-   - **必须检查 success**：如果 false，data 是错误信息，应调用 fail
-   - 传递数据给下一步：\`window.Pilot.workflow.next({ key: value })\`
-   - 读取上一步传递的数据：\`window.PilotData.key\`
+7. **跨步骤数据传递（非常重要）**：
    
-   **示例：提取数据并传递**
+   **返回值结构**：
+   - \`pageAgent.execute()\` 返回 \`{ success: boolean, data: any, history: string[] }\`
+   - **success=true**：操作成功，data 包含提取的数据或操作结果
+   - **success=false**：操作失败，data 是错误信息字符串
+   
+   **必须严格检查 success（关键）**：
    \`\`\`
+   const result = await window.pageAgent.execute("指令");
+   if (!result.success) {
+     return window.Pilot.workflow.fail(result.data || '操作失败');
+   }
+   // 只有 success=true 才能使用 result.data
+   \`\`\`
+   
+   **数据提取示例**：
+   \`\`\`
+   // 提取单个值
    const result = await window.pageAgent.execute("获取页面标题");
    if (!result.success) return window.Pilot.workflow.fail(result.data);
-   window.Pilot.workflow.next({ pageTitle: result.data });
+   const title = result.data; // data 直接是提取的字符串
+   window.Pilot.workflow.next({ pageTitle: title });
+   
+   // 提取多个值（AI 会返回对象）
+   const result = await window.pageAgent.execute("提取商品名称和价格");
+   if (!result.success) return window.Pilot.workflow.fail(result.data);
+   // 如果 AI 返回的是 JSON 对象，data 可能是字符串，需要解析
+   const info = typeof result.data === 'string' ? JSON.parse(result.data) : result.data;
+   window.Pilot.workflow.next({ 
+     productName: info.name,
+     productPrice: info.price 
+   });
    \`\`\`
    
-   **示例：使用上一步的数据**
+   **使用上一步数据**：
    \`\`\`
-   const title = window.PilotData?.pageTitle || '';
-   await window.pageAgent.execute(\`在搜索框中输入标题\n\n[数据]\n标题: \${title}\`);
-   window.Pilot.workflow.next();
+   // 安全获取数据（带默认值）
+   const title = window.PilotData?.pageTitle || '默认标题';
+   const price = window.PilotData?.productPrice || '0';
+   
+   // 将数据传递给 AI 指令
+   await window.pageAgent.execute(\`在搜索框中输入: "\${title}"\`);
+   \`\`\`
+   
+   **数据为空时的处理**：
+   \`\`\`
+   const result = await window.pageAgent.execute("获取用户名");
+   if (!result.success) return window.Pilot.workflow.fail(result.data);
+   if (!result.data) {
+     return window.Pilot.workflow.fail('未找到用户名');
+   }
+   window.Pilot.workflow.next({ username: result.data });
    \`\`\``;
 
 // Step schema for validation
