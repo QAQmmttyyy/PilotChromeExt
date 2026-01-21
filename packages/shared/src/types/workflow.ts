@@ -14,6 +14,7 @@ export interface WorkflowContext {
   tabId: number | null;
   status: 'idle' | 'running' | 'paused' | 'completed' | 'failed';
   executingUrl?: string;
+  toolCallId?: string;
 }
 
 export type RecordedStepType = 'click' | 'input' | 'navigate' | 'submit' | 'select' | 'keypress' | 'ai_step';

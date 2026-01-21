@@ -15,12 +15,12 @@ const TAB_ID = {
 type TabId = typeof TAB_ID[keyof typeof TAB_ID];
 
 function App() {
-  const [activeTab, setActiveTab] = useState<TabId>(TAB_ID.TASK);
+  const [activeTab, setActiveTab] = useState<TabId>(TAB_ID.AGENT);
   const [showSettings, setShowSettings] = useState(false);
 
   const tabs = [
-    { id: TAB_ID.TASK, label: 'Task', icon: <Zap size={14} /> },
     { id: TAB_ID.AGENT, label: 'Agent', icon: <Bot size={14} /> },
+    { id: TAB_ID.TASK, label: 'Task', icon: <Zap size={14} /> },
     { id: TAB_ID.SCRIPTS, label: 'Scripts', icon: <FileCode size={14} /> },
   ];
 

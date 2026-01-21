@@ -52,24 +52,39 @@ syncAIConfig();
 
 // 监听来自 Main World 的信号
 window.addEventListener('message', (event) => {
-  if (event.source !== window || !event.data || event.data.source !== 'PILOT_MAIN') {
+  if (event.source !== window || !event.data) {
     return;
   }
-
-  if (event.data.type === 'MAIN_WORLD_READY') {
-    console.log('[Pilot] Main World ready, syncing config');
-    syncAIConfig();
-  } else if (event.data.type === 'PAGE_AGENT_READY') {
-    console.log('[Pilot] PageAgent ready signal received from Main World');
-    pageAgentReady = true;
-    sendReadyEvent('PAGE_AGENT_READY');
-    checkFullyReady();
-  } else if (event.data.type === 'PAGE_AGENT_CREATE_RESULT') {
-    console.log('[Pilot] PageAgent create result:', event.data.success);
+  
+  // Handle PILOT_MAIN messages
+  if (event.data.source === 'PILOT_MAIN') {
+    if (event.data.type === 'MAIN_WORLD_READY') {
+      console.log('[Pilot] Main World ready, syncing config');
+      syncAIConfig();
+    } else if (event.data.type === 'PAGE_AGENT_READY') {
+      console.log('[Pilot] PageAgent ready signal received from Main World');
+      pageAgentReady = true;
+      sendReadyEvent('PAGE_AGENT_READY');
+      checkFullyReady();
+    } else if (event.data.type === 'PAGE_AGENT_CREATE_RESULT') {
+      console.log('[Pilot] PageAgent create result:', event.data.success);
+      chrome.runtime.sendMessage({
+        type: 'PAGE_AGENT_CREATE_RESULT',
+        success: event.data.success,
+        error: event.data.error
+      }).catch(() => {});
+    }
+  }
+  
+  // Handle PageAgent execution logs
+  if (event.data.source === 'PILOT_PAGEAGENT' && event.data.type === 'PAGEAGENT_STEP') {
+    console.log('[Pilot] PageAgent step:', event.data);
     chrome.runtime.sendMessage({
-      type: 'PAGE_AGENT_CREATE_RESULT',
-      success: event.data.success,
-      error: event.data.error
+      type: 'PAGEAGENT_STEP',
+      action: event.data.action,
+      status: event.data.status,
+      details: event.data.details,
+      result: event.data.result,
     }).catch(() => {});
   }
 });

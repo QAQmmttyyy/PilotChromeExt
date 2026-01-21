@@ -18,6 +18,7 @@ export function adaptToolPart(part: any): ToolPart {
 
   return {
     type: name,
+    toolName: toolName, // Pass through toolName for special handling
     state: toolState,
     input: input,
     output: output,

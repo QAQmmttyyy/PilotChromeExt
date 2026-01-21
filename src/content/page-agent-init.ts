@@ -42,14 +42,23 @@ async function initPageAgent() {
   }
 
   try {
+    // Create PageAgent with proper hooks
     (window as any).pageAgent = new PageAgent({
       apiKey: config.apiKey,
       model: config.model,
       baseURL: baseURL,
-      onBeforeStep: async function(this: InstanceType<typeof PageAgent>) {
+      
+      // Disable ask_user tool - never ask user questions
+      customTools: {
+        ask_user: null,
+      },
+      
+      onBeforeTask: async function(this: InstanceType<typeof PageAgent>) {
+        console.log('[PageAgent] Task starting');
+        
+        // Intercept new page opens
         document.querySelectorAll('a[target="_blank"]').forEach(el => {
           el.removeAttribute('target');
-          console.log('[Pilot] Removed target="_blank" from:', el);
         });
 
         if (!(window as any).__pilotOpenIntercepted) {
@@ -65,8 +74,48 @@ async function initPageAgent() {
             }
             return null;
           };
-          console.log('[Pilot] window.open intercepted');
         }
+      },
+      
+      onAfterStep: async function(this: InstanceType<typeof PageAgent>, stepCnt: number, history: any[]) {
+        console.log(`[PageAgent] Step ${stepCnt} completed`, history);
+        
+        const lastStep = history[history.length - 1];
+        if (lastStep) {
+          const { action, brain, usage } = lastStep;
+          
+          // Send detailed step log
+          window.postMessage({
+            source: 'PILOT_PAGEAGENT',
+            type: 'PAGEAGENT_STEP',
+            action: action.name || '未知操作',
+            status: 'success',
+            stepNumber: stepCnt,
+            details: action.output && action.output.length < 500 ? action.output : undefined,
+            metadata: {
+              actionName: action.name,
+              input: action.input,
+              thinking: brain?.thinking,
+              usage: usage ? {
+                tokens: usage.totalTokens,
+                cached: usage.cachedTokens
+              } : undefined
+            }
+          }, '*');
+        }
+      },
+      
+      onAfterTask: async function(this: InstanceType<typeof PageAgent>, result: any) {
+        console.log('[PageAgent] Task completed', result);
+        
+        // Send task completion log
+        window.postMessage({
+          source: 'PILOT_PAGEAGENT',
+          type: 'PAGEAGENT_STEP',
+          action: 'done',
+          status: result.success ? 'success' : 'error',
+          details: result.data,
+        }, '*');
       },
     });
 

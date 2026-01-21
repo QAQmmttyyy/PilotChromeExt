@@ -5,6 +5,7 @@ export interface WorkflowStep {
   waitId?: number; // 内部使用：等待的 Tab ID
   code: string; // 此步骤要执行的代码
   isAiStep?: boolean; // AI step 标记，用于控制 SPA 导航行为
+  instruction?: string; // AI step 的原始操作指令描述
 }
 
 // ============== Ready Event Types ==============
@@ -29,6 +30,7 @@ export interface WorkflowContext {
   tabId: number | null;
   status: 'idle' | 'running' | 'paused' | 'completed' | 'failed';
   executingUrl?: string; // 当前步骤执行前的 URL，用于检测导航
+  toolCallId?: string; // AI SDK tool call ID for tracking
 }
 
 // ============== Recording Types ==============

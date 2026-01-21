@@ -49,12 +49,29 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return;
   }
 
-  if (request.type === 'PILOT_BRIDGE_ACTION') {
+  if (request.type === 'PAGEAGENT_STEP') {
+    // Forward PageAgent logs to workflow manager
+    const tabId = sender.tab?.id;
+    if (tabId) {
+      const workflow = workflowManager.getWorkflow(tabId);
+      if (workflow) {
+        workflowManager.forwardPageAgentLog(
+          tabId,
+          workflow.currentStepIndex,
+          request.action,
+          request.status,
+          request.details,
+          request.result,
+          request.metadata
+        );
+      }
+    }
+  } else if (request.type === 'PILOT_BRIDGE_ACTION') {
     workflowManager.handleBridgeAction(request.action, request.payload, sender);
   } else if (request.type === 'START_WORKFLOW') {
-    const { steps, script, tabId } = request.payload;
+    const { steps, script, tabId, toolCallId } = request.payload;
     const workflowSteps = steps || (script ? parseScriptToWorkflow(script) : []);
-    workflowManager.prepareAndStartWorkflow(workflowSteps, tabId);
+    workflowManager.prepareAndStartWorkflow(workflowSteps, tabId, toolCallId);
   } else if (request.type === 'RECORDING_STEP') {
     recordingManager.addStepToSession(request.payload);
   } else if (request.type === 'RECORDING_START') {

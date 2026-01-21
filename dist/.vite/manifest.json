@@ -5,12 +5,12 @@
     "src": "../../../../@crx/manifest",
     "isEntry": true
   },
-  "_index.ts-loader-U_1o9sR5.js": {
-    "file": "assets/index.ts-loader-U_1o9sR5.js",
-    "src": "_index.ts-loader-U_1o9sR5.js"
+  "_index.ts-loader-DCCrQ_xX.js": {
+    "file": "assets/index.ts-loader-DCCrQ_xX.js",
+    "src": "_index.ts-loader-DCCrQ_xX.js"
   },
-  "_parser-DgjArhZG.js": {
-    "file": "assets/parser-DgjArhZG.js",
+  "_parser-CWbtfw2I.js": {
+    "file": "assets/parser-CWbtfw2I.js",
     "name": "parser"
   },
   "_settings-BukLs6TL.js": {
@@ -24,16 +24,16 @@
     "isDynamicEntry": true
   },
   "src/background/index.ts": {
-    "file": "assets/index.ts-BV04-igt.js",
+    "file": "assets/index.ts-Edwx3j4W.js",
     "name": "index.ts",
     "src": "src/background/index.ts",
     "isEntry": true,
     "imports": [
-      "_parser-DgjArhZG.js"
+      "_parser-CWbtfw2I.js"
     ]
   },
   "src/content/index.ts": {
-    "file": "assets/index.ts-fPH6zFv-.js",
+    "file": "assets/index.ts-OP7J4OpX.js",
     "name": "index.ts",
     "src": "src/content/index.ts",
     "isEntry": true,
@@ -42,19 +42,19 @@
     ]
   },
   "src/sidepanel/index.html": {
-    "file": "assets/index.html-D2UCjlvE.js",
+    "file": "assets/index.html-Dc_4hcs8.js",
     "name": "index.html",
     "src": "src/sidepanel/index.html",
     "isEntry": true,
     "imports": [
       "_settings-BukLs6TL.js",
-      "_parser-DgjArhZG.js"
+      "_parser-CWbtfw2I.js"
     ],
     "dynamicImports": [
       "node_modules/shiki/dist/wasm.mjs"
     ],
     "css": [
-      "assets/index-CSK_ZNr-.css"
+      "assets/index-Dg_5hT14.css"
     ]
   }
 }

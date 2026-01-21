@@ -6,16 +6,19 @@ import {
 } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
 import {
-  CheckCircle,
+  CircleCheck,
   ChevronDown,
   Loader2,
   Settings,
   XCircle,
 } from "lucide-react"
 import { useState } from "react"
+import { WorkflowExecutionDisplay } from "@/components/agent/chat/WorkflowExecutionDisplay"
+import type { ExecuteWorkflowOutput } from "@pilot/shared"
 
 export type ToolPart = {
   type: string
+  toolName?: string
   state:
     | "input-streaming"
     | "input-available"
@@ -36,7 +39,19 @@ export type ToolProps = {
 const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
-  const { state, input, output, toolCallId } = toolPart
+  const { state, input, output, toolCallId, toolName } = toolPart
+  
+  // Special handling for executeWorkflow
+  const isExecuteWorkflow = toolName === 'executeWorkflow' || toolPart.type === 'executeWorkflow'
+  const hasWorkflowOutput = isExecuteWorkflow && output && 'status' in output && 'steps' in output
+  
+  if (hasWorkflowOutput) {
+    return (
+      <div className={cn("mt-3", className)}>
+        <WorkflowExecutionDisplay output={output as unknown as ExecuteWorkflowOutput} />
+      </div>
+    )
+  }
 
   const getStateIcon = () => {
     switch (state) {
@@ -45,7 +60,7 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
       case "input-available":
         return <Settings className="h-4 w-4 text-orange-500" />
       case "output-available":
-        return <CheckCircle className="h-4 w-4 text-green-500" />
+        return <CircleCheck className="h-4 w-4 text-green-500" />
       case "output-error":
         return <XCircle className="h-4 w-4 text-red-500" />
       default:

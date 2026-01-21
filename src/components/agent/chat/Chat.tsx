@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useChat, type UIMessage } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
+import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
 import { Loader2 } from 'lucide-react';
 import {
   ChatContainerRoot,
@@ -30,10 +30,16 @@ export function Chat({ chatId, isNewChat, serverUrl, initialMessages, onConversa
     },
   }), [serverUrl, chatId]);
 
-  const { messages, sendMessage, status, error } = useChat({
+  const { messages, sendMessage, status, error, setMessages, addToolResult } = useChat({
     id: chatId,
     messages: initialMessages,
     transport,
+    // Automatically send request when all tool results are available
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    async onToolCall({ toolCall }) {
+      console.log('[Chat] onToolCall:', toolCall.toolName, toolCall);
+      // Client-side tool handling will be done in useWorkflowExecution
+    },
   });
 
   const isLoading = status === 'streaming' || status === 'submitted';
@@ -44,7 +50,7 @@ export function Chat({ chatId, isNewChat, serverUrl, initialMessages, onConversa
     }
   }, [status, isNewChat, chatId, onConversationCreated]);
 
-  useWorkflowExecution(messages, initialMessages);
+  useWorkflowExecution(messages, initialMessages, setMessages, addToolResult);
 
   const handleSubmit = () => {
     if (!input.trim() || isLoading) return;

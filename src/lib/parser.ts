@@ -8,6 +8,7 @@ import { WorkflowStep } from './types';
  * function helper() { ... }
  * 
  * // === STEP: Step Name (https://optional-url.com) ===
+ * // INSTRUCTION: 原始操作指令（可选）
  * code...
  * 
  * // === STEP: Next Step ===
@@ -15,11 +16,12 @@ import { WorkflowStep } from './types';
  */
 export function parseScriptToWorkflow(scriptCode: string): WorkflowStep[] {
   const stepRegex = /\/\/ === STEP:\s*(.*?)(?:\s*\((https?:\/\/[^)]+)\))?\s*===/g;
+  const instructionRegex = /\/\/ INSTRUCTION:\s*(.+)/;
   const steps: WorkflowStep[] = [];
   
   let match;
   let lastIndex = 0;
-  let currentStep: Partial<WorkflowStep> | null = null;
+  let currentStep: Partial<WorkflowStep> & { instruction?: string } | null = null;
   let currentStepHeaderUrl: string | undefined;
   let preamble = ''; // 前置代码（第一个 STEP 之前的代码）
 
@@ -43,6 +45,13 @@ export function parseScriptToWorkflow(scriptCode: string): WorkflowStep[] {
     // 1. 处理上一个步骤的代码
     if (currentStep) {
       const stepCode = scriptCode.substring(lastIndex, match.index).trim();
+      
+      // Extract INSTRUCTION comment if exists
+      const instructionMatch = stepCode.match(instructionRegex);
+      if (instructionMatch) {
+        currentStep.instruction = instructionMatch[1].trim();
+      }
+      
       // 将前置代码附加到步骤代码前（如果有）
       currentStep.code = preamble ? `${preamble}\n\n${stepCode}` : stepCode;
       const isAiStep = stepCode.includes('pageAgent.execute');
@@ -74,6 +83,13 @@ export function parseScriptToWorkflow(scriptCode: string): WorkflowStep[] {
   // 处理最后一个步骤
   if (currentStep) {
     const stepCode = scriptCode.substring(lastIndex).trim();
+    
+    // Extract INSTRUCTION comment if exists
+    const instructionMatch = stepCode.match(instructionRegex);
+    if (instructionMatch) {
+      currentStep.instruction = instructionMatch[1].trim();
+    }
+    
     currentStep.code = preamble ? `${preamble}\n\n${stepCode}` : stepCode;
     const isAiStep = stepCode.includes('pageAgent.execute');
     currentStep.isAiStep = isAiStep;

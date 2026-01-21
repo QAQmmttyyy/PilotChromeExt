@@ -1,6 +1,7 @@
 import { WorkflowContext, WorkflowStep } from '../../lib/types';
 import { ensureContentScriptReady, isInjectablePage } from '../utils';
 import { waitForPageReady } from './page-ready';
+import type { WorkflowProgressMessage, WorkflowStatusMessage, PageAgentLogMessage } from '@pilot/shared';
 
 // ============== Step Completion System ==============
 type StepCompletionType = 'signal' | 'mpa_navigation' | 'spa_navigation';
@@ -17,6 +18,18 @@ const workflows = new Map<number, WorkflowContext>();
 
 export function getWorkflow(tabId: number) {
   return workflows.get(tabId);
+}
+
+export function forwardPageAgentLog(
+  tabId: number,
+  stepIndex: number,
+  action: string,
+  status: 'pending' | 'success' | 'error',
+  details?: string,
+  result?: unknown,
+  metadata?: any
+) {
+  notifyPageAgentLog(tabId, stepIndex, action, status, details, result, metadata);
 }
 
 function normalizeUrlForCompare(url?: string) {
@@ -148,21 +161,109 @@ function waitForStepCompletion(
 }
 
 export function notifyWorkflowStatus(tabId: number, status: 'completed' | 'failed', error?: string, data?: any) {
+  const workflow = workflows.get(tabId);
+  const payload: WorkflowStatusMessage['payload'] = {
+    toolCallId: workflow?.toolCallId || '',
+    tabId,
+    status,
+    error,
+    data
+  };
+  
   chrome.runtime.sendMessage({
     type: 'WORKFLOW_STATUS_UPDATE',
-    payload: { tabId, status, error, data }
+    payload
   }).catch(() => { });
+  
+  // Dispose PageAgent when workflow completes
+  if (status === 'completed' || status === 'failed') {
+    chrome.tabs.sendMessage(tabId, { type: 'DISPOSE_PAGE_AGENT' }).catch(() => {
+      console.log('[Pilot Engine] Failed to dispose PageAgent (tab may be closed)');
+    });
+  }
 }
 
-export async function startWorkflow(steps: WorkflowStep[], tabId: number) {
-  console.log(`[Pilot Engine] Starting workflow in Tab ${tabId} with ${steps.length} steps`);
+function notifyStepProgress(
+  tabId: number,
+  stepIndex: number,
+  stepName: string,
+  status: 'starting' | 'running' | 'completed' | 'failed',
+  details?: { url?: string; error?: string }
+) {
+  const workflow = workflows.get(tabId);
+  if (!workflow?.toolCallId) {
+    console.log(`[Pilot Engine] No toolCallId for workflow in tab ${tabId}`);
+    return;
+  }
+  
+  // Get instruction from step
+  const step = workflow.steps[stepIndex];
+  const instruction = step?.instruction;
+  
+  const payload: WorkflowProgressMessage['payload'] = {
+    toolCallId: workflow.toolCallId,
+    stepIndex,
+    stepName,
+    status,
+    timestamp: Date.now(),
+    instruction,
+    ...details,
+  };
+  
+  console.log(`[Pilot Engine] Sending WORKFLOW_PROGRESS:`, payload);
+  chrome.runtime.sendMessage({
+    type: 'WORKFLOW_PROGRESS',
+    payload
+  }).catch(err => {
+    console.error('[Pilot Engine] Failed to send WORKFLOW_PROGRESS:', err);
+  });
+}
+
+function notifyPageAgentLog(
+  tabId: number,
+  stepIndex: number,
+  action: string,
+  status: 'pending' | 'success' | 'error',
+  details?: string,
+  result?: unknown,
+  metadata?: any
+) {
+  const workflow = workflows.get(tabId);
+  if (!workflow?.toolCallId) {
+    console.log(`[Pilot Engine] No toolCallId for workflow in tab ${tabId}`);
+    return;
+  }
+  
+  const payload: PageAgentLogMessage['payload'] = {
+    toolCallId: workflow.toolCallId,
+    stepIndex,
+    timestamp: Date.now(),
+    action,
+    status,
+    details,
+    result,
+    metadata,
+  };
+  
+  console.log(`[Pilot Engine] Sending PAGEAGENT_LOG:`, payload);
+  chrome.runtime.sendMessage({
+    type: 'PAGEAGENT_LOG',
+    payload
+  }).catch(err => {
+    console.error('[Pilot Engine] Failed to send PAGEAGENT_LOG:', err);
+  });
+}
+
+export async function startWorkflow(steps: WorkflowStep[], tabId: number, toolCallId?: string) {
+  console.log(`[Pilot Engine] Starting workflow in Tab ${tabId} with ${steps.length} steps, toolCallId: ${toolCallId}`);
 
   const workflow: WorkflowContext = {
     currentStepIndex: 0,
     data: {},
     steps,
     tabId,
-    status: 'running'
+    status: 'running',
+    toolCallId,
   };
 
   workflows.set(tabId, workflow);
@@ -171,7 +272,7 @@ export async function startWorkflow(steps: WorkflowStep[], tabId: number) {
   executeCurrentStep(tabId);
 }
 
-export async function prepareAndStartWorkflow(steps: WorkflowStep[], tabId: number) {
+export async function prepareAndStartWorkflow(steps: WorkflowStep[], tabId: number, toolCallId?: string) {
   try {
     const tab = await chrome.tabs.get(tabId);
     const currentUrl = tab.url;
@@ -196,7 +297,7 @@ export async function prepareAndStartWorkflow(steps: WorkflowStep[], tabId: numb
     }
 
     console.log(`[Pilot Engine] Page ready, starting workflow`);
-    startWorkflow(steps, tabId);
+    startWorkflow(steps, tabId, toolCallId);
   } catch (err) {
     console.error('[Pilot Engine] Failed to prepare workflow:', err);
     const errorMsg = `准备执行失败: ${err instanceof Error ? err.message : String(err)}`;
@@ -216,13 +317,16 @@ async function executeCurrentStep(tabId: number) {
   if (currentStepIndex >= steps.length) {
     console.log(`[Pilot Engine] All steps completed for Tab ${tabId}.`);
     workflow.status = 'completed';
-    workflows.delete(tabId);
     notifyWorkflowStatus(tabId, 'completed');
+    workflows.delete(tabId);
     return;
   }
 
   const step = steps[currentStepIndex];
   console.log(`[Pilot Engine] Executing Step ${currentStepIndex + 1}: ${step.name}`);
+  
+  // Notify step starting
+  notifyStepProgress(tabId, currentStepIndex, step.name, 'starting', { url: step.url });
 
   try {
     // ===== Phase 1: 导航（如果需要）=====
@@ -359,11 +463,15 @@ async function executeCurrentStep(tabId: number) {
   } catch (err: any) {
     console.error('[Pilot Engine] Execution failed:', err);
     const errorMsg = err.message || String(err);
+    
+    // Notify step failed
+    notifyStepProgress(tabId, currentStepIndex, step.name, 'failed', { error: errorMsg });
+    
     workflow.status = 'failed';
-    workflows.delete(tabId);
-
-    // 通知 sidepanel
+    
+    // 通知 sidepanel (before delete!)
     notifyWorkflowStatus(tabId, 'failed', errorMsg);
+    workflows.delete(tabId);
 
     // 通知用户
     try {
@@ -382,14 +490,21 @@ function advanceWorkflow(tabId: number) {
   const workflow = workflows.get(tabId);
   if (!workflow) return;
 
+  // Notify previous step completed (with url info)
+  const prevStepIndex = workflow.currentStepIndex;
+  const prevStep = workflow.steps[prevStepIndex];
+  if (prevStep) {
+    notifyStepProgress(tabId, prevStepIndex, prevStep.name, 'completed', { url: prevStep.url });
+  }
+
   workflow.currentStepIndex++;
   const { steps, currentStepIndex } = workflow;
 
   if (currentStepIndex >= steps.length) {
     console.log(`[Pilot Engine] Workflow Completed in Tab ${tabId}! 🚀`);
     workflow.status = 'completed';
-    workflows.delete(tabId);
     notifyWorkflowStatus(tabId, 'completed');
+    workflows.delete(tabId);
     return;
   }
 
@@ -449,12 +564,18 @@ export function handleBridgeAction(action: string, payload: any, sender: chrome.
           resolver.cleanup();
         }
 
+        // Notify current step completed
+        const currentStep = wf.steps[wf.currentStepIndex];
+        if (currentStep) {
+          notifyStepProgress(tabId, wf.currentStepIndex, currentStep.name, 'completed', { url: currentStep.url });
+        }
+
         wf.status = 'completed';
-        workflows.delete(tabId);
         console.log(`[Pilot Engine] Workflow finished manually in Tab ${tabId}.`, payload.data);
 
-        // 通知 sidepanel
+        // 通知 sidepanel (before delete!)
         notifyWorkflowStatus(tabId, 'completed', undefined, payload.data);
+        workflows.delete(tabId);
       }
       break;
     case 'workflowFail':
@@ -467,14 +588,20 @@ export function handleBridgeAction(action: string, payload: any, sender: chrome.
           stepCompletionResolvers.delete(tabId);
         }
 
-        failedWf.status = 'failed';
-        const stepName = failedWf.steps[failedWf.currentStepIndex]?.name || 'Unknown';
+        const stepIndex = failedWf.currentStepIndex;
+        const failedStep = failedWf.steps[stepIndex];
+        const stepName = failedStep?.name || 'Unknown';
         const errorMsg = `步骤 "${stepName}" 失败: ${payload.reason}`;
-        workflows.delete(tabId);
+        
+        // Notify step failed
+        notifyStepProgress(tabId, stepIndex, stepName, 'failed', { error: payload.reason });
+
+        failedWf.status = 'failed';
         console.error(`[Pilot Engine] ❌ Workflow FAILED at Step "${stepName}": ${payload.reason}`);
 
-        // 通知 sidepanel
+        // 通知 sidepanel (before delete!)
         notifyWorkflowStatus(tabId, 'failed', errorMsg);
+        workflows.delete(tabId);
 
         // Notify user via alert in the tab
         chrome.scripting.executeScript({
