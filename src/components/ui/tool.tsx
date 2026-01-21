@@ -68,66 +68,6 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
     }
   }
 
-  const getStateBadge = () => {
-    const baseClasses = "px-2 py-1 rounded-full text-xs font-medium"
-    switch (state) {
-      case "input-streaming":
-        return (
-          <span
-            className={cn(
-              baseClasses,
-              "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-            )}
-          >
-            Processing
-          </span>
-        )
-      case "input-available":
-        return (
-          <span
-            className={cn(
-              baseClasses,
-              "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-            )}
-          >
-            Ready
-          </span>
-        )
-      case "output-available":
-        return (
-          <span
-            className={cn(
-              baseClasses,
-              "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-            )}
-          >
-            Completed
-          </span>
-        )
-      case "output-error":
-        return (
-          <span
-            className={cn(
-              baseClasses,
-              "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-            )}
-          >
-            Error
-          </span>
-        )
-      default:
-        return (
-          <span
-            className={cn(
-              baseClasses,
-              "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400"
-            )}
-          >
-            Pending
-          </span>
-        )
-    }
-  }
 
   const formatValue = (value: unknown): string => {
     if (value === null) return "null"
@@ -157,9 +97,8 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
               <span className="font-mono text-sm font-medium">
                 {toolPart.type}
               </span>
-              {getStateBadge()}
             </div>
-            <ChevronDown className={cn("h-4 w-4", isOpen && "rotate-180")} />
+            <ChevronDown className={cn("h-4 w-4 text-muted-foreground", isOpen && "rotate-180")} />
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent
