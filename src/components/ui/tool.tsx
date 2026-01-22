@@ -13,18 +13,20 @@ import {
   XCircle,
 } from "lucide-react"
 import { useState } from "react"
-import { WorkflowExecutionDisplay } from "@/components/agent/chat/WorkflowExecutionDisplay"
+import { WorkflowHeaderExtra, WorkflowContent } from "@/components/agent/chat/WorkflowExecutionDisplay"
 import type { ExecuteWorkflowOutput } from "@pilot/shared"
 
 export type ToolPart = {
   type: string
   toolName?: string
   state:
-    | "input-streaming"
-    | "input-available"
-    | "output-available"
-    | "output-error"
+  | "input-streaming"
+  | "input-available"
+  | "output-available"
+  | "output-error"
+  | "call" // AI SDK may use 'call' state
   input?: Record<string, unknown>
+  args?: Record<string, unknown> // AI SDK may use 'args' instead of 'input'
   output?: Record<string, unknown>
   toolCallId?: string
   errorText?: string
@@ -39,19 +41,9 @@ export type ToolProps = {
 const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
-  const { state, input, output, toolCallId, toolName } = toolPart
-  
-  // Special handling for executeWorkflow
-  const isExecuteWorkflow = toolName === 'executeWorkflow' || toolPart.type === 'executeWorkflow'
-  const hasWorkflowOutput = isExecuteWorkflow && output && 'status' in output && 'steps' in output
-  
-  if (hasWorkflowOutput) {
-    return (
-      <div className={cn("mt-3", className)}>
-        <WorkflowExecutionDisplay output={output as unknown as ExecuteWorkflowOutput} />
-      </div>
-    )
-  }
+  const { state, input, output, toolName } = toolPart
+
+  const isWorkflow = toolName === 'executeWorkflow' || toolPart.type === 'executeWorkflow'
 
   const getStateIcon = () => {
     switch (state) {
@@ -68,7 +60,6 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
     }
   }
 
-
   const formatValue = (value: unknown): string => {
     if (value === null) return "null"
     if (value === undefined) return "undefined"
@@ -82,7 +73,7 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
   return (
     <div
       className={cn(
-        "border-border mt-3 overflow-hidden rounded-lg border",
+        "border-border mt-3 overflow-hidden rounded-lg border bg-card text-card-foreground",
         className
       )}
     >
@@ -90,17 +81,22 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
         <CollapsibleTrigger asChild>
           <Button
             variant="ghost"
-            className="bg-background h-auto w-full justify-between rounded-b-none px-3 py-2 font-normal"
+            className="bg-muted/30 h-auto w-full justify-between rounded-b-none px-3 py-2 font-normal hover:bg-muted/50 transition-colors"
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0 flex-shrink">
               {getStateIcon()}
-              <span className="font-mono text-sm font-medium">
+              <span className="font-mono text-sm font-medium truncate">
                 {toolPart.type}
               </span>
             </div>
-            <ChevronDown className={cn("h-4 w-4 text-muted-foreground", isOpen && "rotate-180")} />
+
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {isWorkflow && output && <WorkflowHeaderExtra output={output as unknown as ExecuteWorkflowOutput} />}
+              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200", isOpen && "rotate-180")} />
+            </div>
           </Button>
         </CollapsibleTrigger>
+
         <CollapsibleContent
           className={cn(
             "border-border border-t",
@@ -108,33 +104,55 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
           )}
         >
           <div className="bg-background space-y-3 p-3">
-            {input && Object.keys(input).length > 0 && (
-              <div>
-                <h4 className="text-muted-foreground mb-2 text-sm font-medium">
-                  Input
-                </h4>
-                <div className="bg-background rounded border p-2 font-mono text-sm">
-                  {Object.entries(input).map(([key, value]) => (
-                    <div key={key} className="mb-1">
-                      <span className="text-muted-foreground">{key}:</span>{" "}
-                      <span>{formatValue(value)}</span>
-                    </div>
-                  ))}
-                </div>
+            {state === "input-streaming" && (
+              <div className="text-muted-foreground text-sm">
+                Processing tool call...
               </div>
             )}
 
-            {output && (
-              <div>
-                <h4 className="text-muted-foreground mb-2 text-sm font-medium">
-                  Output
-                </h4>
-                <div className="bg-background max-h-60 overflow-auto rounded border p-2 font-mono text-sm">
-                  <pre className="whitespace-pre-wrap">
-                    {formatValue(output)}
-                  </pre>
-                </div>
+            {state === "input-available" && (
+              <div className="text-muted-foreground text-sm">
+                Tool ready to execute
               </div>
+            )}
+
+            {(
+              <>
+                {isWorkflow ? (
+                  output && <WorkflowContent output={output as unknown as ExecuteWorkflowOutput} />
+                ) : (
+                  <>
+                    {input && Object.keys(input).length > 0 && (
+                      <div>
+                        <h4 className="text-muted-foreground mb-2 text-sm font-medium">
+                          Input
+                        </h4>
+                        <div className="bg-background rounded border p-2 font-mono text-sm">
+                          {Object.entries(input).map(([key, value]) => (
+                            <div key={key} className="mb-1">
+                              <span className="text-muted-foreground">{key}:</span>{" "}
+                              <span>{formatValue(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {output && (
+                      <div>
+                        <h4 className="text-muted-foreground mb-2 text-sm font-medium">
+                          Output
+                        </h4>
+                        <div className="bg-background max-h-60 overflow-auto rounded border p-2 font-mono text-sm">
+                          <pre className="whitespace-pre-wrap">
+                            {formatValue(output)}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
             )}
 
             {state === "output-error" && toolPart.errorText && (
@@ -143,18 +161,6 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
                 <div className="bg-background rounded border border-red-200 p-2 text-sm dark:border-red-950 dark:bg-red-900/20">
                   {toolPart.errorText}
                 </div>
-              </div>
-            )}
-
-            {state === "input-streaming" && (
-              <div className="text-muted-foreground text-sm">
-                Processing tool call...
-              </div>
-            )}
-
-            {toolCallId && (
-              <div className="text-muted-foreground border-t border-blue-200 pt-2 text-xs">
-                <span className="font-mono">Call ID: {toolCallId}</span>
               </div>
             )}
           </div>

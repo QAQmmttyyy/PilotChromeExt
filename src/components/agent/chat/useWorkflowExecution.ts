@@ -4,7 +4,6 @@ import { isToolPart, extractExecutedToolIds } from './utils';
 import type {
   ExecuteWorkflowOutput,
   WorkflowStepState,
-  PageAgentLogEntry,
 } from '@pilot/shared';
 
 type SetMessages = (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void;
@@ -70,7 +69,7 @@ export function useWorkflowExecution(
         
         // Initialize tool output with execution state
         const initialOutput: ExecuteWorkflowOutput = {
-          status: 'pending',
+          status: 'running',  // Start as running, not pending
           startTime: Date.now(),
           totalSteps: 0,
           currentStep: 0,
@@ -88,7 +87,7 @@ export function useWorkflowExecution(
                   // Replace args with execution output
                   return {
                     ...p,
-                    state: 'result',
+                    state: 'output-available',
                     output: initialOutput,
                   };
                 }
@@ -174,10 +173,7 @@ export function useWorkflowExecution(
                 
                 newOutput.steps[stepIndex] = step;
                 
-                // Update overall status
-                if (newOutput.status === 'pending') {
-                  newOutput.status = 'running';
-                }
+                // Update overall status (already running, no need to check pending)
                 newOutput.currentStep = stepIndex;
                 newOutput.totalSteps = newOutput.steps.length;
                 
@@ -191,7 +187,7 @@ export function useWorkflowExecution(
       // PageAgent logs
       if (message.type === 'PAGEAGENT_LOG') {
         console.log('[useWorkflowExecution] PageAgent log:', message.payload);
-        const { toolCallId, stepIndex, timestamp, action, status, details, result, metadata } = message.payload;
+        const { toolCallId, stepIndex, log } = message.payload;
         
         setMessages(prevMessages => {
           return prevMessages.map(msg => {
@@ -208,16 +204,7 @@ export function useWorkflowExecution(
                 const newOutput = { ...output, steps: [...output.steps] };
                 const step = { ...newOutput.steps[stepIndex] };
                 
-                const newLog: PageAgentLogEntry = {
-                  timestamp,
-                  action,
-                  status,
-                  details,
-                  result,
-                  metadata,
-                };
-                
-                step.pageAgentLogs = [...(step.pageAgentLogs || []), newLog];
+                step.pageAgentLogs = [...(step.pageAgentLogs || []), log];
                 newOutput.steps[stepIndex] = step;
                 
                 return { ...part, output: newOutput };
@@ -259,7 +246,14 @@ export function useWorkflowExecution(
                 
                 finalOutput = newOutput;
                 console.log('[useWorkflowExecution] Updating tool output to:', newOutput);
-                return { ...part, output: newOutput };
+                
+                // Update part state and errorText for unified error handling
+                return {
+                  ...part,
+                  output: newOutput,
+                  state: status === 'failed' ? 'output-error' : 'output-available',
+                  errorText: status === 'failed' ? (error || 'Workflow execution failed') : undefined,
+                };
               })
             };
           });
@@ -284,7 +278,7 @@ export function useWorkflowExecution(
 
 function createInitialOutput(): ExecuteWorkflowOutput {
   return {
-    status: 'pending',
+    status: 'running',  // Start as running, not pending
     startTime: Date.now(),
     totalSteps: 0,
     currentStep: 0,
@@ -313,7 +307,12 @@ function updateToolOutput(
         ...msg,
         parts: msg.parts.map((part: any) => {
           if (part.toolCallId === toolCallId) {
-            return { ...part, output };
+            return {
+              ...part,
+              output,
+              state: output.status === 'failed' ? 'output-error' : 'output-available',
+              errorText: output.status === 'failed' ? (output.error || 'Workflow execution failed') : undefined,
+            };
           }
           return part;
         })

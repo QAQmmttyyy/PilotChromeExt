@@ -4,6 +4,7 @@ import * as recordingManager from './managers/recording';
 import * as workflowManager from './managers/workflow';
 import * as navigationManager from './managers/navigation';
 import { parseScriptToWorkflow } from '../lib/parser';
+import type { PageAgentLogEntry } from '@pilot/shared';
 
 console.log('Pilot background script loaded');
 
@@ -55,14 +56,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (tabId) {
       const workflow = workflowManager.getWorkflow(tabId);
       if (workflow) {
+        const payload = request.payload as PageAgentLogEntry;
         workflowManager.forwardPageAgentLog(
           tabId,
           workflow.currentStepIndex,
-          request.action,
-          request.status,
-          request.details,
-          request.result,
-          request.metadata
+          payload
         );
       }
     }

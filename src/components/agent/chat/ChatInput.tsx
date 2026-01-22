@@ -1,10 +1,10 @@
-import { ArrowUp, Loader2 } from 'lucide-react';
+import { ArrowUp, Loader2 } from "lucide-react";
 import {
   PromptInput,
   PromptInputTextarea,
   PromptInputActions,
   PromptInputAction,
-} from '@/components/ui/prompt-input';
+} from "@/components/ui/prompt-input";
 
 interface ChatInputProps {
   value: string;
@@ -13,7 +13,12 @@ interface ChatInputProps {
   isLoading: boolean;
 }
 
-export function ChatInput({ value, onChange, onSubmit, isLoading }: ChatInputProps) {
+export function ChatInput({
+  value,
+  onChange,
+  onSubmit,
+  isLoading,
+}: ChatInputProps) {
   return (
     <div className="p-3 border-t border-slate-200 bg-white">
       <PromptInput
@@ -25,6 +30,7 @@ export function ChatInput({ value, onChange, onSubmit, isLoading }: ChatInputPro
         className="bg-slate-50 border-slate-200"
       >
         <PromptInputTextarea
+          id="chat-input-textarea"
           placeholder="描述你想要自动化的操作..."
           className="text-sm min-h-[44px]"
         />
@@ -48,4 +54,3 @@ export function ChatInput({ value, onChange, onSubmit, isLoading }: ChatInputPro
     </div>
   );
 }
-

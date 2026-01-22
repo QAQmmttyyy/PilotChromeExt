@@ -5,9 +5,9 @@
     "src": "../../../../@crx/manifest",
     "isEntry": true
   },
-  "_index.ts-loader-DCCrQ_xX.js": {
-    "file": "assets/index.ts-loader-DCCrQ_xX.js",
-    "src": "_index.ts-loader-DCCrQ_xX.js"
+  "_index.ts-loader-Bkd96Ap6.js": {
+    "file": "assets/index.ts-loader-Bkd96Ap6.js",
+    "src": "_index.ts-loader-Bkd96Ap6.js"
   },
   "_parser-CWbtfw2I.js": {
     "file": "assets/parser-CWbtfw2I.js",
@@ -24,7 +24,7 @@
     "isDynamicEntry": true
   },
   "src/background/index.ts": {
-    "file": "assets/index.ts-Edwx3j4W.js",
+    "file": "assets/index.ts-BfHCURN0.js",
     "name": "index.ts",
     "src": "src/background/index.ts",
     "isEntry": true,
@@ -33,7 +33,7 @@
     ]
   },
   "src/content/index.ts": {
-    "file": "assets/index.ts-OP7J4OpX.js",
+    "file": "assets/index.ts-DBx9-xho.js",
     "name": "index.ts",
     "src": "src/content/index.ts",
     "isEntry": true,
@@ -42,7 +42,7 @@
     ]
   },
   "src/sidepanel/index.html": {
-    "file": "assets/index.html-CZ5htMxW.js",
+    "file": "assets/index.html-DlGYb9Tb.js",
     "name": "index.html",
     "src": "src/sidepanel/index.html",
     "isEntry": true,
@@ -54,7 +54,7 @@
       "node_modules/shiki/dist/wasm.mjs"
     ],
     "css": [
-      "assets/index-AZeaHJbs.css"
+      "assets/index-CKoSm6VG.css"
     ]
   }
 }

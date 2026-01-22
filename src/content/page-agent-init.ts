@@ -3,6 +3,7 @@
 // It contains page-agent import which will inject CSS on load
 
 import { PageAgent } from 'page-agent';
+import type { PageAgentWindowMessage } from '@pilot/shared';
 
 console.log('[Pilot] Page Agent Init script loaded');
 
@@ -53,12 +54,11 @@ async function initPageAgent() {
         ask_user: null,
       },
       
-      onBeforeTask: async function(this: InstanceType<typeof PageAgent>) {
-        console.log('[PageAgent] Task starting');
-        
+      onBeforeStep: async function(this: InstanceType<typeof PageAgent>) {
         // Intercept new page opens
         document.querySelectorAll('a[target="_blank"]').forEach(el => {
           el.removeAttribute('target');
+          console.log('[Pilot] Removed target="_blank" from:', el);
         });
 
         if (!(window as any).__pilotOpenIntercepted) {
@@ -74,34 +74,40 @@ async function initPageAgent() {
             }
             return null;
           };
+
+          console.log('[Pilot] window.open intercepted');
         }
       },
       
-      onAfterStep: async function(this: InstanceType<typeof PageAgent>, stepCnt: number, history: any[]) {
+      onAfterStep: async function(this, stepCnt, history) {
         console.log(`[PageAgent] Step ${stepCnt} completed`, history);
         
         const lastStep = history[history.length - 1];
         if (lastStep) {
-          const { action, brain, usage } = lastStep;
+          const { action, usage } = lastStep;
           
           // Send detailed step log
-          window.postMessage({
+          const message: PageAgentWindowMessage = {
             source: 'PILOT_PAGEAGENT',
             type: 'PAGEAGENT_STEP',
-            action: action.name || '未知操作',
-            status: 'success',
-            stepNumber: stepCnt,
-            details: action.output && action.output.length < 500 ? action.output : undefined,
-            metadata: {
-              actionName: action.name,
-              input: action.input,
-              thinking: brain?.thinking,
-              usage: usage ? {
-                tokens: usage.totalTokens,
-                cached: usage.cachedTokens
-              } : undefined
+            payload: {
+              timestamp: Date.now(),
+              action: action.name || 'unknown',
+              status: 'success',
+              stepNumber: stepCnt,
+              details: typeof action.output === 'string' ? action.output : JSON.stringify(action.output),
+              result: action.output,
+              metadata: {
+                actionName: action.name,
+                input: action.input,
+                usage: usage ? {
+                  tokens: usage.totalTokens,
+                  cached: usage.cachedTokens
+                } : undefined
+              }
             }
-          }, '*');
+          };
+          window.postMessage(message, '*');
         }
       },
       
@@ -109,13 +115,18 @@ async function initPageAgent() {
         console.log('[PageAgent] Task completed', result);
         
         // Send task completion log
-        window.postMessage({
+        const message: PageAgentWindowMessage = {
           source: 'PILOT_PAGEAGENT',
           type: 'PAGEAGENT_STEP',
-          action: 'done',
-          status: result.success ? 'success' : 'error',
-          details: result.data,
-        }, '*');
+          payload: {
+            timestamp: Date.now(),
+            action: 'done',
+            status: result.success ? 'success' : 'error',
+            details: typeof result.data === 'string' ? result.data : JSON.stringify(result.data),
+            result: result.data
+          }
+        };
+        window.postMessage(message, '*');
       },
     });
 

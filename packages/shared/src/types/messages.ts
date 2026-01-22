@@ -6,8 +6,9 @@ export interface Conversation {
 }
 
 // Workflow Execution Output - the complete execution state stored in tool output
+// Note: 'pending' state is removed - workflow starts as 'running' once initialized
 export interface ExecuteWorkflowOutput {
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'running' | 'completed' | 'failed';
   startTime: number;
   endTime?: number;
   totalSteps: number;
@@ -19,7 +20,7 @@ export interface ExecuteWorkflowOutput {
 export interface WorkflowStepState {
   stepIndex: number;
   stepName: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed';  // Keep 'pending' for individual steps
   startTime?: number;
   endTime?: number;
   url?: string;
@@ -38,7 +39,6 @@ export interface PageAgentLogEntry {
   metadata?: {
     actionName?: string;
     input?: string | Record<string, unknown>;
-    thinking?: string;
     usage?: {
       tokens?: number;
       cached?: number;
@@ -66,23 +66,17 @@ export interface PageAgentLogMessage {
   payload: {
     toolCallId: string;
     stepIndex: number;
-    timestamp: number;
-    action: string;
-    status: 'pending' | 'success' | 'error';
-    stepNumber?: number;
-    details?: string;
-    result?: unknown;
-    metadata?: {
-      actionName?: string;
-      input?: unknown;
-      thinking?: string;
-      usage?: {
-        tokens?: number;
-        cached?: number;
-      };
-    };
+    log: PageAgentLogEntry;
   };
 }
+
+// Window message types (Main World <-> Isolated World)
+export interface PageAgentWindowMessage {
+  source: 'PILOT_PAGEAGENT';
+  type: 'PAGEAGENT_STEP';
+  payload: PageAgentLogEntry;
+}
+
 
 export interface WorkflowStatusMessage {
   type: 'WORKFLOW_STATUS_UPDATE';

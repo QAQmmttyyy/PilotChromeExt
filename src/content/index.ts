@@ -3,6 +3,7 @@
 import { createStepPayload } from '../lib/recorder';
 import { RecordingStepPayload } from '../lib/types';
 import { settings } from '../lib/settings';
+import type { PageAgentWindowMessage } from '@pilot/shared';
 
 console.log('Pilot Bridge (Isolated World) loaded');
 
@@ -78,13 +79,11 @@ window.addEventListener('message', (event) => {
   
   // Handle PageAgent execution logs
   if (event.data.source === 'PILOT_PAGEAGENT' && event.data.type === 'PAGEAGENT_STEP') {
-    console.log('[Pilot] PageAgent step:', event.data);
+    const message = event.data as PageAgentWindowMessage;
+    console.log('[Pilot] PageAgent step:', message);
     chrome.runtime.sendMessage({
       type: 'PAGEAGENT_STEP',
-      action: event.data.action,
-      status: event.data.status,
-      details: event.data.details,
-      result: event.data.result,
+      payload: message.payload
     }).catch(() => {});
   }
 });
