@@ -1,3 +1,5 @@
+import type { AgentHistory } from 'page-agent';
+
 export interface Conversation {
   id: string;
   title?: string;
@@ -31,19 +33,10 @@ export interface WorkflowStepState {
 
 export interface PageAgentLogEntry {
   timestamp: number;
-  action: string;
   status: 'pending' | 'success' | 'error';
-  stepNumber?: number;
-  details?: string;
-  result?: string | Record<string, unknown>;
-  metadata?: {
-    actionName?: string;
-    input?: string | Record<string, unknown>;
-    usage?: {
-      tokens?: number;
-      cached?: number;
-    };
-  };
+  stepNumber: number;
+  action: AgentHistory['action'];
+  usage?: AgentHistory['usage'];
 }
 
 // Chrome message types for workflow execution

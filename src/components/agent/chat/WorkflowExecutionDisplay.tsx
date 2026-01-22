@@ -172,11 +172,6 @@ function WorkflowStep({
             {hasLogs && step.pageAgentLogs!.map((log, logIdx) => (
               <PageAgentLogItem key={logIdx} log={log} />
             ))}
-            {/* {step.error && (
-              <div className="p-2 text-destructive rounded text-xs border border-destructive/20 break-words">
-                <span className="font-semibold">Error: </span>{step.error}
-              </div>
-            )} */}
           </div>
         </div>
       </CollapsibleContent>
@@ -199,7 +194,7 @@ function PageAgentLogItem({ log }: { log: PageAgentLogEntry }) {
     }
   };
 
-  const outputText = log.details || (typeof log.result === 'string' ? log.result : undefined);
+  const outputText = log.action.output;
 
   return (
     <div className="text-xs flex gap-2">
@@ -208,7 +203,7 @@ function PageAgentLogItem({ log }: { log: PageAgentLogEntry }) {
       </div>
       <div className="flex-1 min-w-0 space-y-1">
         <div className="font-medium text-foreground/90 leading-tight">
-          {log.action}
+          {log.action.name}
         </div>
         {outputText && (
           <div className="text-muted-foreground leading-relaxed break-words text-pretty whitespace-pre-wrap">

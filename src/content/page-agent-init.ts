@@ -92,26 +92,17 @@ async function initPageAgent() {
             type: 'PAGEAGENT_STEP',
             payload: {
               timestamp: Date.now(),
-              action: action.name || 'unknown',
               status: 'success',
               stepNumber: stepCnt,
-              details: typeof action.output === 'string' ? action.output : JSON.stringify(action.output),
-              result: action.output,
-              metadata: {
-                actionName: action.name,
-                input: action.input,
-                usage: usage ? {
-                  tokens: usage.totalTokens,
-                  cached: usage.cachedTokens
-                } : undefined
-              }
+              action,
+              usage
             }
           };
           window.postMessage(message, '*');
         }
       },
       
-      onAfterTask: async function(this: InstanceType<typeof PageAgent>, result: any) {
+      onAfterTask: async function(this, result) {
         console.log('[PageAgent] Task completed', result);
         
         // Send task completion log
@@ -120,10 +111,13 @@ async function initPageAgent() {
           type: 'PAGEAGENT_STEP',
           payload: {
             timestamp: Date.now(),
-            action: 'done',
             status: result.success ? 'success' : 'error',
-            details: typeof result.data === 'string' ? result.data : JSON.stringify(result.data),
-            result: result.data
+            stepNumber: 0,
+            action: {
+              name: 'done',
+              input: null,
+              output: result.data
+            }
           }
         };
         window.postMessage(message, '*');
