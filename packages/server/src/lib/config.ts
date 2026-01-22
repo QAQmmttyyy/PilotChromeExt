@@ -16,5 +16,6 @@ const openrouter = createOpenRouter({
 });
 
 export function getModel(): LanguageModel {
-  return openrouter('google/gemini-3-flash-preview');
+  // return openrouter('google/gemini-3-flash-preview');
+  return openrouter('deepseek/deepseek-v3.2');
 }
