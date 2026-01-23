@@ -42,7 +42,7 @@
     ]
   },
   "src/sidepanel/index.html": {
-    "file": "assets/index.html-DIAB2ocJ.js",
+    "file": "assets/index.html-DRG-Ja9T.js",
     "name": "index.html",
     "src": "src/sidepanel/index.html",
     "isEntry": true,
@@ -54,7 +54,7 @@
       "node_modules/shiki/dist/wasm.mjs"
     ],
     "css": [
-      "assets/index-BJsV7UJ9.css"
+      "assets/index-DV5CN_wS.css"
     ]
   }
 }

@@ -5,6 +5,7 @@ import {
   PromptInputActions,
   PromptInputAction,
 } from "@/components/ui/prompt-input";
+import { Button } from "@/components/ui/button";
 
 interface ChatInputProps {
   value: string;
@@ -20,34 +21,32 @@ export function ChatInput({
   isLoading,
 }: ChatInputProps) {
   return (
-    <div className="p-3 border-t border-slate-200 bg-white">
+    <div className="p-3">
       <PromptInput
         value={value}
         onValueChange={onChange}
         onSubmit={onSubmit}
         isLoading={isLoading}
-        disabled={isLoading}
-        className="bg-slate-50 border-slate-200"
       >
         <PromptInputTextarea
           id="chat-input-textarea"
-          placeholder="描述你想要自动化的操作..."
+          placeholder="描述你的任务..."
           className="text-sm min-h-[44px]"
         />
         <PromptInputActions className="justify-end px-2 pb-2">
           <PromptInputAction tooltip="发送消息 (Enter)">
-            <button
-              type="button"
+            <Button
+              variant="default"
+              size="icon"
+              className="h-8 w-8 rounded-full"
               onClick={onSubmit}
-              disabled={isLoading || !value.trim()}
-              className="p-2 rounded-full bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600 transition-colors"
             >
               {isLoading ? (
-                <Loader2 size={16} className="animate-spin" />
+                <Loader2 className="size-5 animate-spin" />
               ) : (
-                <ArrowUp size={16} />
+                <ArrowUp className="size-5" />
               )}
-            </button>
+            </Button>
           </PromptInputAction>
         </PromptInputActions>
       </PromptInput>
