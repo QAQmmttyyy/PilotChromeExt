@@ -10,16 +10,16 @@ const StepSchema = z.object({
 });
 
 const StepsResponseSchema = z.object({
-  steps: z.array(StepSchema).describe('自动化任务的步骤序列'),
+  steps: z.array(StepSchema).describe('网页任务的步骤序列'),
 });
 
 export const generateStepsTool = tool({
-  description: `将用户的自动化任务分解为可执行的步骤序列。
-当用户描述一个浏览器自动化任务时调用此工具。
+  description: `将用户的任务分解为可执行的步骤序列。
+当用户描述一个浏览器任务时调用此工具。
 步骤类型包括：navigate（导航到URL）、ai_step（AI执行的操作如点击、输入等）。
 返回结构化的步骤列表供用户确认。`,
   inputSchema: z.object({
-    task: z.string().describe('用户描述的自动化任务'),
+    task: z.string().describe('用户描述的任务'),
   }),
   execute: async ({ task }) => {
     try {

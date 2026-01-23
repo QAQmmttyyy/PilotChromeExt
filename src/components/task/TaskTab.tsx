@@ -215,7 +215,7 @@ export function TaskTab({ onOpenSettings }: TaskTabProps) {
           className="bg-white border-slate-200 shadow-sm rounded-xl [&_textarea]:min-h-[7.5rem]"
         >
           <PromptInputTextarea 
-            placeholder="描述你想要自动化的操作，例如：打开百度搜索 AI，点击第一个结果"
+            placeholder="描述你想要的操作，例如：打开百度搜索 AI，点击第一个结果"
             className="text-sm placeholder:text-slate-400"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && e.metaKey && !isProcessing && !e.nativeEvent.isComposing) {

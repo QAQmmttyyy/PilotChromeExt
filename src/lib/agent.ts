@@ -45,7 +45,7 @@ function createProvider(config: AgentConfig) {
 }
 
 // Steps 生成的 system prompt
-const STEPS_SYSTEM_PROMPT = `你是一个浏览器自动化任务分解专家。用户会描述一个网页操作任务，你需要将其分解为步骤序列。
+const STEPS_SYSTEM_PROMPT = `你是一个浏览器任务分解专家。用户会描述一个网页操作任务，你需要将其分解为步骤序列。
 
 ## 步骤类型
 只允许两种类型：
@@ -70,7 +70,7 @@ const STEPS_SYSTEM_PROMPT = `你是一个浏览器自动化任务分解专家。
 5. 不要返回任何解释，只返回 JSON 数组`;
 
 // 脚本生成的 system prompt（复用 ai.ts 的核心逻辑）
-const SCRIPT_SYSTEM_PROMPT = `你是一个浏览器自动化脚本生成专家。根据提供的步骤序列生成可执行的 JavaScript 代码。
+const SCRIPT_SYSTEM_PROMPT = `你是一个浏览器脚本生成专家。根据提供的步骤序列生成可执行的 JavaScript 代码。
 
 ## 输入格式
 你会收到一个步骤数组，每个步骤包含：

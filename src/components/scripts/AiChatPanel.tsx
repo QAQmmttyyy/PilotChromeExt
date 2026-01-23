@@ -124,7 +124,7 @@ export function AiChatPanel({
             type="text"
             value={aiPrompt}
             onChange={e => setAiPrompt(e.target.value)}
-            placeholder={chatHistory.length > 0 ? "继续对话..." : "描述你想要的自动化操作..."}
+            placeholder={chatHistory.length > 0 ? "继续对话..." : "描述你想要的操作..."}
             className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500"
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.nativeEvent.isComposing && !isGenerating) {

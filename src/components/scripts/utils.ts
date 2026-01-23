@@ -5,7 +5,7 @@ import { RecordedStep } from '../../lib/types';
 export const SEED_SCRIPT: Script = {
   id: 'demo-workflow',
   name: '示例：百度搜索',
-  description: '演示如何使用 Pilot 进行多步骤自动化',
+  description: '演示如何使用 Pilot 进行多步骤任务',
   code: `// === STEP: 打开百度 (https://www.baidu.com) ===
 (async () => {
   try {
