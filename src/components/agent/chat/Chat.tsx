@@ -30,7 +30,7 @@ export function Chat({ chatId, isNewChat, serverUrl, initialMessages, onConversa
     },
   }), [serverUrl, chatId]);
 
-  const { messages, sendMessage, status, error, setMessages, addToolResult } = useChat({
+  const { messages, sendMessage, status, error, setMessages, addToolOutput } = useChat({
     id: chatId,
     messages: initialMessages,
     transport,
@@ -50,7 +50,7 @@ export function Chat({ chatId, isNewChat, serverUrl, initialMessages, onConversa
     }
   }, [status, isNewChat, chatId, onConversationCreated]);
 
-  useWorkflowExecution(messages, initialMessages, setMessages, addToolResult);
+  useWorkflowExecution(messages, initialMessages, setMessages, addToolOutput);
 
   const handleSubmit = () => {
     if (!input.trim() || isLoading) return;
@@ -82,7 +82,7 @@ export function Chat({ chatId, isNewChat, serverUrl, initialMessages, onConversa
         <ScrollButton className="absolute right-4 bottom-20" />
       </ChatContainerRoot>
 
-      <ChatInput 
+      <ChatInput
         value={input}
         onChange={setInput}
         onSubmit={handleSubmit}
