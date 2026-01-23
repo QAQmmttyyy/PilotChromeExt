@@ -69,7 +69,7 @@ export function Chat({ chatId, isNewChat, serverUrl, initialMessages, onConversa
       <ChatContainerRoot className="flex-1 overflow-hidden">
         <ChatContainerContent className="p-4 space-y-6">
           {messages.map((m) => (
-            <ChatMessage key={m.id} message={m} />
+            <ChatMessage key={m.id} message={m} isStreaming={status === 'streaming'} />
           ))}
           {isLoading && messages[messages.length - 1]?.role === 'user' && (
             <div className="flex items-center gap-2 text-slate-400 text-xs px-12">

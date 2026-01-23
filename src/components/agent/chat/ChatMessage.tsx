@@ -5,9 +5,10 @@ import { isToolPart, adaptToolPart } from './utils';
 
 interface ChatMessageProps {
   message: UIMessage;
+  isStreaming?: boolean;
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
   if (isUser) {
@@ -50,6 +51,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
               <Tool
                 key={idx}
                 toolPart={adaptToolPart(part)}
+                defaultOpen={isStreaming}
               />
             );
           }
