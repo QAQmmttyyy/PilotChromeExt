@@ -3,10 +3,6 @@ import type { LanguageModel } from 'ai';
 
 const openrouter = createOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
-  headers: {
-    'HTTP-Referer': 'https://github.com/workmoly/pilot-chrome-ext', // OpenRouter 建议添加
-    'X-Title': 'Pilot Agent', // OpenRouter 建议添加
-  },
   extraBody: {
     plugins: [
       { "id": "web", "enabled": false }
@@ -17,5 +13,7 @@ const openrouter = createOpenRouter({
 
 export function getModel(): LanguageModel {
   // return openrouter('google/gemini-3-flash-preview');
-  return openrouter('deepseek/deepseek-v3.2');
+  // return openrouter('deepseek/deepseek-v3.2');
+  // return openrouter('x-ai/grok-code-fast-1');
+  return openrouter('minimax/minimax-m2.1');
 }
