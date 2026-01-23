@@ -9,7 +9,6 @@ import {
   CircleCheck,
   ChevronDown,
   Loader2,
-  Settings,
   XCircle,
 } from "lucide-react"
 import { useState } from "react"
@@ -47,16 +46,13 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
 
   const getStateIcon = () => {
     switch (state) {
-      case "input-streaming":
-        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-      case "input-available":
-        return <Settings className="h-4 w-4 text-orange-500" />
       case "output-available":
         return <CircleCheck className="h-4 w-4 text-green-500" />
       case "output-error":
         return <XCircle className="h-4 w-4 text-red-500" />
+      case "input-streaming":
       default:
-        return <Settings className="text-muted-foreground h-4 w-4" />
+        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
     }
   }
 
@@ -73,7 +69,7 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
   return (
     <div
       className={cn(
-        "border-border mt-3 overflow-hidden rounded-lg border bg-card text-card-foreground",
+        "border-border overflow-hidden rounded-lg border bg-card text-card-foreground",
         className
       )}
     >
@@ -107,12 +103,6 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
             {state === "input-streaming" && (
               <div className="text-muted-foreground text-sm">
                 Processing tool call...
-              </div>
-            )}
-
-            {state === "input-available" && (
-              <div className="text-muted-foreground text-sm">
-                Tool ready to execute
               </div>
             )}
 
