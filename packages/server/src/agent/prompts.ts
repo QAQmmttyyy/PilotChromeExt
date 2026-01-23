@@ -41,7 +41,7 @@ export const STEPS_GENERATION_PROMPT = `你是一个浏览器自动化任务分�
 ## 重要规则
 1. **按页面划分步骤**：同一页面内的多个操作应合并为一个 ai_step
 2. **单页约束**：一个 ai_step 执行中不能触发页面导航
-3. 如果用户未指定起始 URL，根据任务推断合理的起始页面
+3. **起始页面判断**：如果用户未指定 URL 且任务暗示在当前页面进行（如“总结本页”、“提取数据”），**不要**生成 navigate 步骤。仅在明确需要访问新网站时生成 navigate。
 4. 操作指令要清晰、具体`;
 
 export const SCRIPT_GENERATION_PROMPT = `你是一个浏览器自动化脚本生成专家。根据提供的步骤序列生成可执行的 JavaScript 代码。
