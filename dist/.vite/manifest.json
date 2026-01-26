@@ -24,7 +24,7 @@
     "isDynamicEntry": true
   },
   "src/background/index.ts": {
-    "file": "assets/index.ts-BfHCURN0.js",
+    "file": "assets/index.ts-CRcpxvcu.js",
     "name": "index.ts",
     "src": "src/background/index.ts",
     "isEntry": true,
@@ -42,7 +42,7 @@
     ]
   },
   "src/sidepanel/index.html": {
-    "file": "assets/index.html-BhndkMP-.js",
+    "file": "assets/index.html-DNK5T2Bf.js",
     "name": "index.html",
     "src": "src/sidepanel/index.html",
     "isEntry": true,

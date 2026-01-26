@@ -333,9 +333,16 @@ async function executeCurrentStep(tabId: number) {
         console.log(`[Pilot Engine] Waiting for new page to be ready...`);
         await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
         console.log(`[Pilot Engine] New page ready`);
+      } else {
+        // URL 已匹配，不需要导航，立即完成该步骤
+        console.log(`[Pilot Engine] Already at target URL, navigation step completed immediately`);
+        // 短暂延迟确保 UI 有时间处理 starting 状态
+        await new Promise(resolve => setTimeout(resolve, 100));
+        advanceWorkflow(tabId);
+        return;
       }
     }
-    // 如果不需要导航，页面在 workflow 开始前已经就绪，直接执行
+    // 如果需要导航已完成，继续执行脚本
 
     // ===== Phase 2: 记录执行前 URL =====
     const beforeExecuteTab = await chrome.tabs.get(tabId);

@@ -236,14 +236,26 @@ export function useWorkflowExecution(
                 if (!isToolPart(part) || part.toolCallId !== toolCallId)
                   return part;
 
-                const output = part.output as ExecuteWorkflowOutput;
-                if (!output || stepIndex >= output.steps.length) return part;
+                const output =
+                  (part.output as ExecuteWorkflowOutput) ||
+                  createInitialOutput();
 
                 const newOutput = { ...output, steps: [...output.steps] };
-                const step = { ...newOutput.steps[stepIndex] };
 
+                // Ensure steps array is long enough
+                while (newOutput.steps.length <= stepIndex) {
+                  newOutput.steps.push(createEmptyStep(newOutput.steps.length));
+                }
+
+                const step = { ...newOutput.steps[stepIndex] };
                 step.pageAgentLogs = [...(step.pageAgentLogs || []), log];
                 newOutput.steps[stepIndex] = step;
+
+                // Update totalSteps if needed
+                newOutput.totalSteps = Math.max(
+                  newOutput.totalSteps,
+                  newOutput.steps.length,
+                );
 
                 return { ...part, output: newOutput };
               }),
