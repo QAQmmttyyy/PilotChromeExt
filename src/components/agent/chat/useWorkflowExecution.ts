@@ -4,17 +4,17 @@ import { isToolPart, extractExecutedToolIds } from "./utils";
 import type { ExecuteWorkflowOutput, WorkflowStepState } from "@pilot/shared";
 
 type SetMessages = (
-  messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])
+  messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[]),
 ) => void;
 
 export function useWorkflowExecution(
   messages: UIMessage[],
   initialMessages: UIMessage[],
   setMessages: SetMessages,
-  addToolOutput: UseChatHelpers<UIMessage>["addToolOutput"]
+  addToolOutput: UseChatHelpers<UIMessage>["addToolOutput"],
 ) {
   const executedToolIdsRef = useRef<Set<string>>(
-    extractExecutedToolIds(initialMessages)
+    extractExecutedToolIds(initialMessages),
   );
 
   // Detect executeWorkflow tool calls (client-side tool) and trigger execution
@@ -49,7 +49,7 @@ export function useWorkflowExecution(
         if (isExecutionOutput) {
           console.log(
             "[useWorkflowExecution] Skipping already executed workflow:",
-            part.toolCallId
+            part.toolCallId,
           );
           executedToolIdsRef.current.add(part.toolCallId);
           return;
@@ -68,13 +68,13 @@ export function useWorkflowExecution(
             hasArgs: !!args,
             hasScript: !!script,
             args,
-          }
+          },
         );
 
         if (!script) {
           console.error(
             "[useWorkflowExecution] No script in tool call args, part:",
-            part
+            part,
           );
           return;
         }
@@ -119,7 +119,7 @@ export function useWorkflowExecution(
           if (tab?.id) {
             console.log(
               "[useWorkflowExecution] Starting workflow in tab:",
-              tab.id
+              tab.id,
             );
             await chrome.runtime.sendMessage({
               type: "START_WORKFLOW",
@@ -145,7 +145,8 @@ export function useWorkflowExecution(
           addToolOutput({
             tool: "executeWorkflow",
             toolCallId,
-            output: failedOutput,
+            state: "output-error",
+            errorText: err instanceof Error ? err.message : String(err),
           });
         }
       });
@@ -158,7 +159,7 @@ export function useWorkflowExecution(
       console.log(
         "[useWorkflowExecution] Received message:",
         message.type,
-        message.payload
+        message.payload,
       );
 
       if (message.type === "WORKFLOW_PROGRESS") {
@@ -263,7 +264,7 @@ export function useWorkflowExecution(
 
         if (!toolCallId) {
           console.error(
-            "[useWorkflowExecution] Empty toolCallId in WORKFLOW_STATUS_UPDATE!"
+            "[useWorkflowExecution] Empty toolCallId in WORKFLOW_STATUS_UPDATE!",
           );
           return;
         }
@@ -293,7 +294,7 @@ export function useWorkflowExecution(
                 finalOutput = newOutput;
                 console.log(
                   "[useWorkflowExecution] Updating tool output to:",
-                  newOutput
+                  newOutput,
                 );
 
                 // Update part state and errorText for unified error handling
@@ -316,13 +317,24 @@ export function useWorkflowExecution(
         if (finalOutput) {
           console.log(
             "[useWorkflowExecution] Calling addToolOutput with ExecuteWorkflowOutput:",
-            finalOutput
+            finalOutput,
           );
-          addToolOutput({
-            tool: "executeWorkflow",
-            toolCallId,
-            output: finalOutput,
-          });
+
+          if (status === "failed") {
+            addToolOutput({
+              tool: "executeWorkflow",
+              toolCallId,
+              state: "output-error",
+              errorText: error || "Workflow execution failed",
+            });
+          } else {
+            addToolOutput({
+              tool: "executeWorkflow",
+              toolCallId,
+              output: finalOutput,
+              state: "output-available",
+            });
+          }
         }
       }
     };
@@ -354,7 +366,7 @@ function updateToolOutput(
   setMessages: SetMessages,
   messageId: string,
   toolCallId: string,
-  output: ExecuteWorkflowOutput
+  output: ExecuteWorkflowOutput,
 ) {
   setMessages((prevMessages) => {
     return prevMessages.map((msg) => {
