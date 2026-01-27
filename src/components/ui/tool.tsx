@@ -87,7 +87,7 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
         >
           <div className="bg-background space-y-3 p-3">
             {state === "input-streaming" && (
-              <div className="text-muted-foreground text-sm">
+              <div className="text-muted-foreground text-sm text-center">
                 Processing tool call...
               </div>
             )}
