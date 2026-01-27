@@ -74,7 +74,7 @@ export function WorkflowContent({ output }: { output: ExecuteWorkflowOutput }) {
   };
 
   return (
-    <div className="divide-y divide-border">
+    <>
       {output.steps.map((step, idx) => (
         <WorkflowStep
           key={idx}
@@ -84,7 +84,7 @@ export function WorkflowContent({ output }: { output: ExecuteWorkflowOutput }) {
           onToggle={() => toggleStep(idx)}
         />
       ))}
-    </div>
+    </>
   );
 }
 
