@@ -12,27 +12,13 @@ import {
   XCircle,
 } from "lucide-react"
 import { useState } from "react"
-import { WorkflowHeaderExtra, WorkflowContent } from "@/components/agent/chat/WorkflowExecutionDisplay"
+import { WorkflowHeaderExtra, WorkflowContent, WorkflowFooter } from "@/components/agent/chat/WorkflowExecutionDisplay"
 import type { ExecuteWorkflowOutput } from "@pilot/shared"
-
-export type ToolPart = {
-  type: string
-  toolName?: string
-  state:
-  | "input-streaming"
-  | "input-available"
-  | "output-available"
-  | "output-error"
-  | "call" // AI SDK may use 'call' state
-  input?: Record<string, unknown>
-  args?: Record<string, unknown> // AI SDK may use 'args' instead of 'input'
-  output?: Record<string, unknown>
-  toolCallId?: string
-  errorText?: string
-}
+import type { ToolUIPart, DynamicToolUIPart } from "ai"
+import { getToolOrDynamicToolName } from "ai"
 
 export type ToolProps = {
-  toolPart: ToolPart
+  toolPart: ToolUIPart | DynamicToolUIPart
   defaultOpen?: boolean
   className?: string
 }
@@ -40,9 +26,9 @@ export type ToolProps = {
 const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
-  const { state, input, output, toolName } = toolPart
-
-  const isWorkflow = toolName === 'executeWorkflow' || toolPart.type === 'executeWorkflow'
+  const { state, input, output } = toolPart
+  const toolName = getToolOrDynamicToolName(toolPart)
+  const isWorkflow = toolName === 'executeWorkflow'
 
   const getStateIcon = () => {
     switch (state) {
@@ -82,12 +68,12 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
             <div className="flex items-center gap-2 min-w-0 flex-shrink">
               {getStateIcon()}
               <span className="font-mono text-sm font-medium truncate">
-                {toolPart.type}
+                {toolName}
               </span>
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0">
-              {isWorkflow && output && <WorkflowHeaderExtra output={output as unknown as ExecuteWorkflowOutput} />}
+              {isWorkflow && output ? <WorkflowHeaderExtra output={output as ExecuteWorkflowOutput} /> : null}
               <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200", isOpen && "rotate-180")} />
             </div>
           </Button>
@@ -112,7 +98,7 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
                   output && <WorkflowContent output={output as unknown as ExecuteWorkflowOutput} />
                 ) : (
                   <>
-                    {input && Object.keys(input).length > 0 && (
+                    {input && typeof input === 'object' && Object.keys(input).length > 0 && (
                       <div>
                         <h4 className="text-muted-foreground mb-2 text-sm font-medium">
                           Input
@@ -154,6 +140,12 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
               </div>
             )}
           </div>
+          {isWorkflow && output ? (
+            <WorkflowFooter 
+              output={output as ExecuteWorkflowOutput} 
+              toolCallId={toolPart.toolCallId}
+            />
+          ) : null}
         </CollapsibleContent>
       </Collapsible>
     </div>

@@ -1,7 +1,7 @@
 import type { UIMessage } from '@ai-sdk/react';
 import { Message, MessageContent } from '@/components/ui/message';
 import { Tool } from '@/components/ui/tool';
-import { isToolPart, adaptToolPart } from './utils';
+import { isToolOrDynamicToolUIPart } from 'ai';
 
 interface ChatMessageProps {
   message: UIMessage;
@@ -14,7 +14,7 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
   if (isUser) {
     return (
       <Message className="justify-end">
-        {message.parts?.map((part: any, idx: number) => {
+        {message.parts?.map((part, idx) => {
           if (part.type === 'text') {
             return (
               <MessageContent
@@ -34,7 +34,7 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
   return (
     <Message>
       <div className="flex flex-col gap-2 flex-1 min-w-0">
-        {message.parts?.map((part: any, idx: number) => {
+        {message.parts?.map((part, idx) => {
           if (part.type === 'text') {
             return (
               <MessageContent
@@ -46,11 +46,11 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
               </MessageContent>
             );
           }
-          if (isToolPart(part)) {
+          if (isToolOrDynamicToolUIPart(part)) {
             return (
               <Tool
                 key={idx}
-                toolPart={adaptToolPart(part)}
+                toolPart={part}
                 defaultOpen={isStreaming}
               />
             );

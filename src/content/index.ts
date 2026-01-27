@@ -264,6 +264,14 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     }, '*');
     sendResponse({ forwarded: true });
     return true;
+  } else if (request.type === 'STOP_PAGE_AGENT') {
+    console.log('[Pilot] Received STOP_PAGE_AGENT request');
+    window.postMessage({
+      source: 'PILOT_ISOLATED',
+      type: 'STOP_PAGE_AGENT'
+    }, '*');
+    sendResponse({ forwarded: true });
+    return true;
   }
 });
 

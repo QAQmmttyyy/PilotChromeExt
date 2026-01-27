@@ -1,5 +1,6 @@
 import { tool, generateText } from 'ai';
 import { z } from 'zod';
+import type { GenerateScriptOutput } from '@pilot/shared';
 import { SCRIPT_GENERATION_PROMPT } from '../prompts';
 import { cleanGeneratedCode } from '../../lib/utils';
 import { getModel } from '../../lib/config';
@@ -20,7 +21,7 @@ export const generateScriptTool = tool({
   inputSchema: z.object({
     steps: z.array(RecordedStepSchema).describe('步骤序列'),
   }),
-  execute: async ({ steps }) => {
+  execute: async ({ steps }): Promise<GenerateScriptOutput> => {
     try {
       const stepsJson = JSON.stringify(steps.map(s => ({
         type: s.type,

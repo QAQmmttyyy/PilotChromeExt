@@ -1,11 +1,22 @@
 import { useEffect, useRef } from "react";
 import type { UIMessage, UseChatHelpers } from "@ai-sdk/react";
-import { isToolPart, extractExecutedToolIds } from "./utils";
-import type { ExecuteWorkflowOutput, WorkflowStepState } from "@pilot/shared";
+import type { UIMessagePart, UIDataTypes, UITools, ToolUIPart } from "ai";
+import { isToolOrDynamicToolUIPart, getToolOrDynamicToolName } from "ai";
+import { extractExecutedToolIds } from "./utils";
+import type { 
+  ExecuteWorkflowOutput, 
+  WorkflowStepState, 
+  AgentTools,
+  ExecuteWorkflowToolPart
+} from "@pilot/shared";
 
 type SetMessages = (
   messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[]),
 ) => void;
+
+function isExecuteWorkflowPart(part: ToolUIPart<AgentTools>): part is ExecuteWorkflowToolPart {
+  return getToolOrDynamicToolName(part) === 'executeWorkflow';
+}
 
 export function useWorkflowExecution(
   messages: UIMessage[],
@@ -21,120 +32,89 @@ export function useWorkflowExecution(
   useEffect(() => {
     const lastMsg = messages[messages.length - 1];
     if (lastMsg?.role === "assistant" && lastMsg.parts) {
-      lastMsg.parts.forEach(async (part: any) => {
-        if (!isToolPart(part)) return;
+      lastMsg.parts.forEach(async (messagePart) => {
+        if (!isToolOrDynamicToolUIPart(messagePart)) return;
 
-        const toolName =
-          part.toolName ||
-          (part.type?.startsWith("tool-") ? part.type.substring(5) : "");
-        if (toolName !== "executeWorkflow") return;
+        const part = messagePart as ToolUIPart<AgentTools>;
+        
+        if (!isExecuteWorkflowPart(part)) return;
         if (executedToolIdsRef.current.has(part.toolCallId)) return;
+        if (part.state !== "input-available") return;
 
-        // Skip if input is still streaming (args not complete yet)
-        if (part.state === "input-streaming") {
-          return;
-        }
-
-        // For client-side tools, only process when state is 'input-available' or 'call'
-        if (part.state !== "input-available" && part.state !== "call") {
-          return;
-        }
-
-        // Skip if already has execution output (from history/refresh)
-        const currentOutput = part.output;
-        const isExecutionOutput =
-          currentOutput &&
-          "status" in currentOutput &&
-          "steps" in currentOutput;
-        if (isExecutionOutput) {
-          console.log(
-            "[useWorkflowExecution] Skipping already executed workflow:",
-            part.toolCallId,
-          );
-          executedToolIdsRef.current.add(part.toolCallId);
-          return;
-        }
-
-        // part.args/input contains the script
-        const toolCallId = part.toolCallId;
-        const args = part.args || part.input;
-        const script = args?.script;
-
-        console.log(
-          "[useWorkflowExecution] Detected executeWorkflow tool call:",
-          {
-            toolCallId,
-            state: part.state,
-            hasArgs: !!args,
-            hasScript: !!script,
-            args,
-          },
-        );
-
-        if (!script) {
-          console.error(
-            "[useWorkflowExecution] No script in tool call args, part:",
-            part,
-          );
-          return;
-        }
+        const { toolCallId, input } = part;
+        const script = input.script;
 
         executedToolIdsRef.current.add(toolCallId);
-
-        // Initialize tool output with execution state
-        const initialOutput: ExecuteWorkflowOutput = {
-          status: "running", // Start as running, not pending
-          startTime: Date.now(),
-          totalSteps: 0,
-          currentStep: 0,
-          steps: [],
-        };
-
-        // Update tool part to show execution state
-        setMessages((prevMessages) => {
-          return prevMessages.map((msg) => {
-            if (msg.id !== lastMsg.id) return msg;
-            return {
-              ...msg,
-              parts: msg.parts.map((p: any) => {
-                if (p.toolCallId === toolCallId) {
-                  // Replace args with execution output
-                  return {
-                    ...p,
-                    state: "output-available",
-                    output: initialOutput,
-                  };
-                }
-                return p;
-              }),
-            };
-          });
-        });
 
         try {
           const [tab] = await chrome.tabs.query({
             active: true,
             currentWindow: true,
           });
-          if (tab?.id) {
-            console.log(
-              "[useWorkflowExecution] Starting workflow in tab:",
-              tab.id,
-            );
-            await chrome.runtime.sendMessage({
-              type: "START_WORKFLOW",
-              payload: {
-                script,
-                tabId: tab.id,
-                toolCallId,
-              },
-            });
+          if (!tab?.id) {
+            throw new Error("No active tab found");
           }
+
+          // Initialize tool output with execution state (including tabId)
+          const initialOutput: ExecuteWorkflowOutput = {
+            status: "running",
+            startTime: Date.now(),
+            totalSteps: 0,
+            currentStep: 0,
+            steps: [],
+            tabId: tab.id,
+          };
+
+          // Update tool part to show execution state
+          setMessages((prevMessages) => {
+            return prevMessages.map((msg) => {
+              if (msg.id !== lastMsg.id) return msg;
+              return {
+                ...msg,
+                parts: msg.parts.map((p: any) => {
+                  if (p.toolCallId === toolCallId) {
+                    // Replace args with execution output
+                    return {
+                      ...p,
+                      state: "output-available",
+                      output: initialOutput,
+                    };
+                  }
+                  return p;
+                }),
+              };
+            });
+          });
+
+          console.log(
+            "[useWorkflowExecution] Starting workflow in tab:",
+            tab.id,
+          );
+          await chrome.runtime.sendMessage({
+            type: "START_WORKFLOW",
+            payload: {
+              script,
+              tabId: tab.id,
+              toolCallId,
+            },
+          });
         } catch (err) {
           console.error("Failed to execute workflow:", err);
+          
+          // Get tabId if available from error case
+          let tabId: number | undefined;
+          try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            tabId = tab?.id;
+          } catch {}
+          
           const failedOutput: ExecuteWorkflowOutput = {
-            ...initialOutput,
             status: "failed",
+            startTime: Date.now(),
+            totalSteps: 0,
+            currentStep: 0,
+            steps: [],
+            tabId,
             error: err instanceof Error ? err.message : String(err),
             endTime: Date.now(),
           };
@@ -145,6 +125,7 @@ export function useWorkflowExecution(
           addToolOutput({
             tool: "executeWorkflow",
             toolCallId,
+            output: failedOutput as never,
             state: "output-error",
             errorText: err instanceof Error ? err.message : String(err),
           });
@@ -165,6 +146,7 @@ export function useWorkflowExecution(
       if (message.type === "WORKFLOW_PROGRESS") {
         const {
           toolCallId,
+          tabId,
           stepIndex,
           stepName,
           status,
@@ -180,14 +162,18 @@ export function useWorkflowExecution(
 
             return {
               ...msg,
-              parts: msg.parts.map((part: any) => {
-                if (!isToolPart(part) || part.toolCallId !== toolCallId)
+              parts: msg.parts.map((part) => {
+                if (!isToolOrDynamicToolUIPart(part) || part.toolCallId !== toolCallId)
                   return part;
 
                 const output =
                   (part.output as ExecuteWorkflowOutput) ||
                   createInitialOutput();
-                const newOutput = { ...output, steps: [...output.steps] };
+                const newOutput = { 
+                  ...output, 
+                  steps: [...output.steps],
+                  tabId: tabId || output.tabId
+                };
 
                 // Ensure steps array is long enough
                 while (newOutput.steps.length <= stepIndex) {
@@ -214,8 +200,8 @@ export function useWorkflowExecution(
                 newOutput.currentStep = stepIndex;
                 newOutput.totalSteps = newOutput.steps.length;
 
-                return { ...part, output: newOutput };
-              }),
+                return { ...part, output: newOutput } as UIMessagePart<UIDataTypes, UITools>;
+              }) as UIMessagePart<UIDataTypes, UITools>[],
             };
           });
         });
@@ -224,7 +210,7 @@ export function useWorkflowExecution(
       // PageAgent logs
       if (message.type === "PAGEAGENT_LOG") {
         console.log("[useWorkflowExecution] PageAgent log:", message.payload);
-        const { toolCallId, stepIndex, log } = message.payload;
+        const { toolCallId, tabId, stepIndex, log } = message.payload;
 
         setMessages((prevMessages) => {
           return prevMessages.map((msg) => {
@@ -232,15 +218,19 @@ export function useWorkflowExecution(
 
             return {
               ...msg,
-              parts: msg.parts.map((part: any) => {
-                if (!isToolPart(part) || part.toolCallId !== toolCallId)
+              parts: msg.parts.map((part) => {
+                if (!isToolOrDynamicToolUIPart(part) || part.toolCallId !== toolCallId)
                   return part;
 
                 const output =
                   (part.output as ExecuteWorkflowOutput) ||
                   createInitialOutput();
 
-                const newOutput = { ...output, steps: [...output.steps] };
+                const newOutput = { 
+                  ...output, 
+                  steps: [...output.steps],
+                  tabId: tabId || output.tabId
+                };
 
                 // Ensure steps array is long enough
                 while (newOutput.steps.length <= stepIndex) {
@@ -257,8 +247,8 @@ export function useWorkflowExecution(
                   newOutput.steps.length,
                 );
 
-                return { ...part, output: newOutput };
-              }),
+                return { ...part, output: newOutput } as UIMessagePart<UIDataTypes, UITools>;
+              }) as UIMessagePart<UIDataTypes, UITools>[],
             };
           });
         });
@@ -266,12 +256,13 @@ export function useWorkflowExecution(
 
       // Workflow completed/failed
       if (message.type === "WORKFLOW_STATUS_UPDATE") {
-        const { toolCallId, status, error } = message.payload;
+        const { toolCallId, status, error, tabId } = message.payload;
 
         console.log("[useWorkflowExecution] WORKFLOW_STATUS_UPDATE:", {
           toolCallId,
           status,
           error,
+          tabId,
         });
 
         if (!toolCallId) {
@@ -289,8 +280,8 @@ export function useWorkflowExecution(
 
             return {
               ...msg,
-              parts: msg.parts.map((part: any) => {
-                if (!isToolPart(part) || part.toolCallId !== toolCallId)
+              parts: msg.parts.map((part) => {
+                if (!isToolOrDynamicToolUIPart(part) || part.toolCallId !== toolCallId)
                   return part;
 
                 const output =
@@ -301,6 +292,7 @@ export function useWorkflowExecution(
                   status,
                   endTime: Date.now(),
                   error: error || output.error,
+                  tabId: tabId || output.tabId,
                 };
 
                 finalOutput = newOutput;
@@ -319,8 +311,8 @@ export function useWorkflowExecution(
                     status === "failed"
                       ? error || "Workflow execution failed"
                       : undefined,
-                };
-              }),
+                } as UIMessagePart<UIDataTypes, UITools>;
+              }) as UIMessagePart<UIDataTypes, UITools>[],
             };
           });
         });
@@ -336,6 +328,7 @@ export function useWorkflowExecution(
             addToolOutput({
               tool: "executeWorkflow",
               toolCallId,
+              output: finalOutput as never,
               state: "output-error",
               errorText: error || "Workflow execution failed",
             });
@@ -358,7 +351,7 @@ export function useWorkflowExecution(
 
 function createInitialOutput(): ExecuteWorkflowOutput {
   return {
-    status: "running", // Start as running, not pending
+    status: "running",
     startTime: Date.now(),
     totalSteps: 0,
     currentStep: 0,

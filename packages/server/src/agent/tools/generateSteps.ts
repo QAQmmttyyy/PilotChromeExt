@@ -1,5 +1,6 @@
 import { tool, generateObject } from 'ai';
 import { z } from 'zod';
+import type { GenerateStepsOutput } from '@pilot/shared';
 import { STEPS_GENERATION_PROMPT } from '../prompts';
 import { getModel } from '../../lib/config';
 
@@ -21,7 +22,7 @@ export const generateStepsTool = tool({
   inputSchema: z.object({
     task: z.string().describe('用户描述的任务'),
   }),
-  execute: async ({ task }) => {
+  execute: async ({ task }): Promise<GenerateStepsOutput> => {
     try {
       console.log('[generateSteps] Starting with task:', task);
       

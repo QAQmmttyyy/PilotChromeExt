@@ -179,6 +179,52 @@ export function notifyWorkflowStatus(tabId: number, status: 'completed' | 'faile
   }
 }
 
+export function stopWorkflow(tabId: number) {
+  const workflow = workflows.get(tabId);
+  if (!workflow) {
+    console.log(`[Pilot Engine] No workflow found for Tab ${tabId} to stop`);
+    return;
+  }
+
+  console.log(`[Pilot Engine] Stopping workflow in Tab ${tabId}`);
+
+  // Update current step status to failed (if exists)
+  const currentStepIndex = workflow.currentStepIndex;
+  const currentStep = workflow.steps[currentStepIndex];
+  if (currentStep) {
+    notifyStepProgress(
+      tabId,
+      currentStepIndex,
+      currentStep.name,
+      'failed',
+      { error: 'Workflow stopped by user' }
+    );
+  }
+
+  // Update workflow status
+  workflow.status = 'failed';
+
+  // Notify UI
+  notifyWorkflowStatus(tabId, 'failed', 'Workflow stopped by user');
+
+  // Cleanup workflow BEFORE rejecting resolver
+  // This prevents the catch block in executeCurrentStep from running
+  workflows.delete(tabId);
+
+  // Send stop signal to content script
+  chrome.tabs.sendMessage(tabId, { type: 'STOP_PAGE_AGENT' }).catch(() => {
+    console.log('[Pilot Engine] Failed to send stop signal to content script (tab may be closed)');
+  });
+
+  // Cleanup step completion resolver (do this LAST)
+  // The reject will trigger catch block, but workflow is already deleted
+  const resolver = stepCompletionResolvers.get(tabId);
+  if (resolver) {
+    resolver.cleanup();
+    resolver.reject('Workflow stopped by user');
+  }
+}
+
 function notifyStepProgress(
   tabId: number,
   stepIndex: number,
@@ -198,6 +244,7 @@ function notifyStepProgress(
 
   const payload: WorkflowProgressMessage['payload'] = {
     toolCallId: workflow.toolCallId,
+    tabId,
     stepIndex,
     stepName,
     status,
@@ -228,6 +275,7 @@ function notifyPageAgentLog(
 
   const payload: PageAgentLogMessage['payload'] = {
     toolCallId: workflow.toolCallId,
+    tabId,
     stepIndex,
     log
   };
@@ -457,6 +505,13 @@ async function executeCurrentStep(tabId: number) {
   } catch (err: any) {
     console.error('[Pilot Engine] Execution failed:', err);
     const errorMsg = err.message || String(err);
+
+    // Check if workflow still exists (might be deleted by stopWorkflow)
+    const currentWorkflow = workflows.get(tabId);
+    if (!currentWorkflow) {
+      console.log('[Pilot Engine] Workflow already handled by stopWorkflow, skipping error handling');
+      return;
+    }
 
     // Notify step failed
     notifyStepProgress(tabId, currentStepIndex, step.name, 'failed', { error: errorMsg });

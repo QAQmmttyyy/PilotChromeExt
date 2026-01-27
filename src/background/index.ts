@@ -70,6 +70,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const { steps, script, tabId, toolCallId } = request.payload;
     const workflowSteps = steps || (script ? parseScriptToWorkflow(script) : []);
     workflowManager.prepareAndStartWorkflow(workflowSteps, tabId, toolCallId);
+  } else if (request.type === 'STOP_WORKFLOW') {
+    const { tabId } = request.payload;
+    workflowManager.stopWorkflow(tabId);
+    sendResponse({ success: true });
   } else if (request.type === 'RECORDING_STEP') {
     recordingManager.addStepToSession(request.payload);
   } else if (request.type === 'RECORDING_START') {

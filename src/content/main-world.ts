@@ -51,6 +51,22 @@ window.addEventListener('message', async (event) => {
       }
     }
   }
+
+  if (event.data.type === 'STOP_PAGE_AGENT') {
+    const agent = (window as any).pageAgent;
+    if (agent) {
+      console.log('[Pilot] Stopping PageAgent');
+      try {
+        if (typeof agent.stop === 'function') {
+          agent.stop();
+        } else if (typeof agent.dispose === 'function') {
+          agent.dispose();
+        }
+      } catch (e) {
+        console.warn('[Pilot] Error stopping PageAgent:', e);
+      }
+    }
+  }
 });
 
 window.postMessage({

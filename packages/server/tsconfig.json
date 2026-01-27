@@ -8,10 +8,9 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "./dist",
-    "rootDir": "./src",
     "declaration": true,
     "paths": {
-      "@pilot/shared": ["../shared/src"]
+      "@pilot/shared": ["../shared/dist"]
     }
   },
   "include": ["src/**/*"],

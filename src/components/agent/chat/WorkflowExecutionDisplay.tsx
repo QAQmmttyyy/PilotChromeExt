@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CircleCheck, XCircle, Loader2, Clock, ChevronDown } from 'lucide-react';
+import { CircleCheck, XCircle, Loader2, Clock, ChevronDown, Square } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from "@/components/ui/button";
 import {
@@ -212,6 +212,46 @@ function PageAgentLogItem({ log }: { log: PageAgentLogEntry }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * WorkflowFooter - Footer with stop button
+ */
+export function WorkflowFooter({ output, toolCallId }: { output: ExecuteWorkflowOutput; toolCallId?: string }) {
+  const [isStopping, setIsStopping] = useState(false);
+  const isRunning = output.status === 'running';
+
+  const handleStop = async () => {
+    if (!toolCallId || !output.tabId || isStopping) return;
+    
+    setIsStopping(true);
+    try {
+      await chrome.runtime.sendMessage({
+        type: 'STOP_WORKFLOW',
+        payload: { tabId: output.tabId, toolCallId }
+      });
+    } catch (err) {
+      console.error('Failed to stop workflow:', err);
+      setIsStopping(false);
+    }
+  };
+
+  if (!isRunning) return null;
+
+  return (
+    <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-border bg-muted/10">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleStop}
+        disabled={isStopping}
+        className="h-7 px-2 text-xs gap-1.5"
+      >
+        <Square className="size-3.5" />
+        {isStopping ? '停止中...' : '停止'}
+      </Button>
     </div>
   );
 }
