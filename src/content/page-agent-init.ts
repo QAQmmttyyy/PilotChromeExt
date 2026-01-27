@@ -195,6 +195,14 @@ async function initPageAgent() {
       },
     });
 
+    // Hide the panel UI - we use our own sidepanel UI
+    const agent = (window as any).pageAgent;
+    if (agent.panel) {
+      agent.panel.hide();
+      // Override show method to prevent it from showing up again during execute()
+      agent.panel.show = () => {};
+    }
+    
     console.log("[Pilot] PageAgent created successfully");
     window.postMessage(
       {
