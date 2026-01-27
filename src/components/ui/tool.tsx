@@ -132,17 +132,14 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
             )}
 
             {state === "output-error" && toolPart.errorText && (
-              <div>
-                <h4 className="mb-2 text-sm font-medium text-red-500">Error</h4>
-                <div className="bg-background rounded border border-red-200 p-2 text-sm dark:border-red-950 dark:bg-red-900/20">
-                  {toolPart.errorText}
-                </div>
+              <div className="flex items-start gap-2 rounded-md bg-red-50 p-2 text-sm text-red-600 dark:bg-red-950/30 dark:text-red-400">
+                <span className="break-words">{toolPart.errorText}</span>
               </div>
             )}
           </div>
           {isWorkflow && output ? (
-            <WorkflowFooter 
-              output={output as ExecuteWorkflowOutput} 
+            <WorkflowFooter
+              output={output as ExecuteWorkflowOutput}
               toolCallId={toolPart.toolCallId}
             />
           ) : null}
