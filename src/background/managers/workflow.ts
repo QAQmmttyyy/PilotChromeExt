@@ -50,7 +50,7 @@ async function createPageAgentOnDemand(tabId: number): Promise<void> {
       window.removeEventListener('message', messageListener);
       chrome.runtime.onMessage.removeListener(listener);
       reject(new Error('PageAgent creation timed out'));
-    }, 10000);
+    }, 6000);
 
     const listener = (message: any) => {
       if (message.type === 'PAGE_AGENT_CREATE_RESULT') {
@@ -156,10 +156,22 @@ function waitForStepCompletion(
   });
 }
 
-export function notifyWorkflowStatus(tabId: number, status: 'completed' | 'failed', error?: string, data?: any) {
+export function notifyWorkflowStatus(
+  tabId: number, 
+  status: 'completed' | 'failed', 
+  error?: string, 
+  data?: any,
+  toolCallId?: string
+) {
   const workflow = workflows.get(tabId);
+  const resolvedToolCallId = toolCallId || workflow?.toolCallId || '';
+  
+  if (!resolvedToolCallId) {
+    console.error('[Pilot Engine] notifyWorkflowStatus called without toolCallId!');
+  }
+  
   const payload: WorkflowStatusMessage['payload'] = {
-    toolCallId: workflow?.toolCallId || '',
+    toolCallId: resolvedToolCallId,
     tabId,
     status,
     error,
@@ -319,16 +331,16 @@ export async function prepareAndStartWorkflow(steps: WorkflowStep[], tabId: numb
       if (firstStepUrl && isInjectablePage(firstStepUrl)) {
         console.log(`[Pilot Engine] Current page not injectable, navigating to: ${firstStepUrl}`);
         await chrome.tabs.update(tabId, { url: firstStepUrl });
-        await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
+        await waitForPageReady(tabId);
       } else {
-        throw new Error('当前页面无法执行脚本，请先打开目标网页');
+        throw new Error('无法在此页面执行（浏览器内置页面不支持）');
       }
     } else {
       // 可注入页面：确保 content script 就绪（注入或刷新）
       await ensureContentScriptReady(tabId);
       chrome.tabs.sendMessage(tabId, { type: 'RESET_AGENT' }).catch(() => { });
       console.log(`[Pilot Engine] Waiting for page ready before starting workflow...`);
-      await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
+      await waitForPageReady(tabId);
     }
 
     console.log(`[Pilot Engine] Page ready, starting workflow`);
@@ -336,7 +348,7 @@ export async function prepareAndStartWorkflow(steps: WorkflowStep[], tabId: numb
   } catch (err) {
     console.error('[Pilot Engine] Failed to prepare workflow:', err);
     const errorMsg = `准备执行失败: ${err instanceof Error ? err.message : String(err)}`;
-    notifyWorkflowStatus(tabId, 'failed', errorMsg);
+    notifyWorkflowStatus(tabId, 'failed', errorMsg, undefined, toolCallId);
   }
 }
 
@@ -379,7 +391,7 @@ async function executeCurrentStep(tabId: number) {
 
         // 导航后等待新页面就绪
         console.log(`[Pilot Engine] Waiting for new page to be ready...`);
-        await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
+        await waitForPageReady(tabId);
         console.log(`[Pilot Engine] New page ready`);
       } else {
         // URL 已匹配，不需要导航，立即完成该步骤
@@ -477,7 +489,7 @@ async function executeCurrentStep(tabId: number) {
     if (completionType === 'mpa_navigation') {
       // MPA 导航：等待新页面就绪后推进
       console.log(`[Pilot Engine] MPA navigation detected, waiting for new page ready...`);
-      await waitForPageReady(tabId, ['PAGE_FULLY_READY'], 15000);
+      await waitForPageReady(tabId);
       console.log(`[Pilot Engine] New page ready, auto-advancing workflow`);
 
       // 再次检查工作流是否已被推进（防止重复推进）

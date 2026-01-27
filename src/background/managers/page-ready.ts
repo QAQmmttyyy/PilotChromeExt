@@ -12,7 +12,7 @@ interface ReadyResolver {
 const readyResolvers = new Map<number, ReadyResolver>();
 
 // 注意：webNavigation.onCommitted 监听器在 Navigation Tracking 部分
-export function waitForPageReady(tabId: number, requiredEvents: ReadyEventType[] = ['PAGE_FULLY_READY'], timeoutMs: number = 10000): Promise<void> {
+export function waitForPageReady(tabId: number, requiredEvents: ReadyEventType[] = ['PAGE_FULLY_READY'], timeoutMs: number = 6000): Promise<void> {
   // 如果已有等待中的 resolver，先清理它
   const existingResolver = readyResolvers.get(tabId);
   if (existingResolver) {

@@ -1,15 +1,26 @@
 // ============== Page Injection Utilities ==============
+const BLOCKED_PROTOCOLS = [
+  'chrome:',
+  'chrome-extension:',
+  'edge:',
+  'about:',
+  'devtools:',
+  'view-source:',
+  'data:',
+  'blob:',
+  'moz-extension:',
+  'brave:',
+  'opera:',
+];
+
 export function isInjectablePage(url: string | undefined): boolean {
   if (!url) return false;
-  const blockedPrefixes = [
-    'chrome://',
-    'chrome-extension://',
-    'edge://',
-    'about:',
-    'devtools://',
-    'view-source:',
-  ];
-  return !blockedPrefixes.some(prefix => url.startsWith(prefix));
+  try {
+    const protocol = new URL(url).protocol;
+    return !BLOCKED_PROTOCOLS.includes(protocol);
+  } catch {
+    return false;
+  }
 }
 
 export async function ensureContentScriptReady(tabId: number): Promise<void> {
