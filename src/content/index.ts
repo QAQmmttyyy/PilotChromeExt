@@ -1,7 +1,5 @@
 // Isolated World Content Script
-// Pilot: Pure Bridge + Recording Event Capture
-import { createStepPayload } from '../lib/recorder';
-import { RecordingStepPayload } from '../lib/types';
+// Pilot: Pure Bridge
 import { settings } from '../lib/settings';
 import type { PageAgentWindowMessage } from '@pilot/shared';
 
@@ -96,163 +94,14 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
 });
 
-// ============== Recording State ==============
-let isRecording = false;
-let lastInputElement: Element | null = null;
-let inputDebounceTimer: number | null = null;
-
-// ============== Recording Event Capture ==============
-function sendRecordingStep(payload: RecordingStepPayload) {
-  if (!isRecording) return;
-  
-  // 使用 chrome.runtime.sendMessage 发送
-  // 不需要 await，因为我们希望尽可能快地发出，即使页面即将卸载
-  chrome.runtime.sendMessage({
-    type: 'RECORDING_STEP',
-    payload
-  }).catch(err => console.debug('[Pilot Recording] Send error (expected on nav):', err));
-}
-
-function handleClick(e: MouseEvent) {
-  if (!isRecording) return;
-  
-  const target = e.target as Element;
-  if (!target) return;
-  
-  // 找到可点击的祖先元素，如果没有就使用 target 本身
-  const clickable = target as HTMLElement;
-  
-  const tag = clickable.tagName.toLowerCase();
-
-  // input/textarea 的点击不单独记录（会记录输入）
-  // if (tag === 'input' || tag === 'textarea') return;
-  
-  // 过滤掉 body/html 等顶层元素的点击
-  if (tag === 'body' || tag === 'html') return;
-  
-  const payload = createStepPayload('click', clickable);
-  
-  // 如果是链接或提交按钮，可能会导致页面跳转
-  // 我们尽可能快地发出消息
-  sendRecordingStep(payload);
-  
-  console.log('[Pilot Recording] Click captured:', payload);
-}
-
-function handleInput(e: Event) {
-  if (!isRecording) return;
-  
-  const target = e.target as HTMLInputElement | HTMLTextAreaElement;
-  if (!target) return;
-  
-  const tag = target.tagName.toLowerCase();
-  if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') return;
-  
-  // 防抖处理：用户可能连续输入
-  lastInputElement = target;
-  
-  if (inputDebounceTimer) {
-    clearTimeout(inputDebounceTimer);
-  }
-  
-  inputDebounceTimer = window.setTimeout(() => {
-    if (!lastInputElement) return;
-    
-    const inputTarget = lastInputElement as HTMLInputElement;
-    const isPassword = inputTarget.type === 'password';
-    
-    const payload = createStepPayload(
-      'input',
-      lastInputElement,
-      isPassword ? '***' : inputTarget.value
-    );
-    sendRecordingStep(payload);
-    
-    console.log('[Pilot Recording] Input:', payload);
-    lastInputElement = null;
-  }, 500);
-}
-
-function handleSubmit(e: Event) {
-  if (!isRecording) return;
-  
-  const target = e.target as HTMLFormElement;
-  if (!target || target.tagName.toLowerCase() !== 'form') return;
-  
-  const payload = createStepPayload('submit', target);
-  sendRecordingStep(payload);
-  
-  console.log('[Pilot Recording] Submit:', payload);
-}
-
-function handleChange(e: Event) {
-  if (!isRecording) return;
-  
-  const target = e.target as HTMLSelectElement;
-  if (!target || target.tagName.toLowerCase() !== 'select') return;
-  
-  const payload = createStepPayload('select', target, target.value);
-  sendRecordingStep(payload);
-  
-  console.log('[Pilot Recording] Select:', payload);
-}
-
-function handleKeydown(e: KeyboardEvent) {
-  if (!isRecording) return;
-  
-  // 只记录特殊按键（Enter, Escape, Tab 等）
-  const specialKeys = ['Enter', 'Escape', 'Tab'];
-  if (!specialKeys.includes(e.key)) return;
-  
-  const target = e.target as Element;
-  const payload = createStepPayload('keypress', target, undefined, e.key);
-  sendRecordingStep(payload);
-  
-  console.log('[Pilot Recording] Keypress:', payload);
-}
-
-function startEventCapture() {
-  document.addEventListener('click', handleClick, true);
-  document.addEventListener('input', handleInput, true);
-  document.addEventListener('submit', handleSubmit, true);
-  document.addEventListener('change', handleChange, true);
-  document.addEventListener('keydown', handleKeydown, true);
-  console.log('[Pilot Recording] Event capture started');
-}
-
-function stopEventCapture() {
-  document.removeEventListener('click', handleClick, true);
-  document.removeEventListener('input', handleInput, true);
-  document.removeEventListener('submit', handleSubmit, true);
-  document.removeEventListener('change', handleChange, true);
-  document.removeEventListener('keydown', handleKeydown, true);
-  console.log('[Pilot Recording] Event capture stopped');
-}
-
-// 监听来自 Background 的录制控制消息
+// 监听来自 Background 的消息
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.type === 'PING') {
     sendResponse({ pong: true });
     return;
   }
   
-  if (request.type === 'RECORDING_CONTROL') {
-    const { action } = request;
-    
-    if (action === 'start' || action === 'resume') {
-      isRecording = true;
-      startEventCapture();
-      sendResponse({ success: true });
-    } else if (action === 'stop' || action === 'pause') {
-      isRecording = false;
-      stopEventCapture();
-      sendResponse({ success: true });
-    } else if (action === 'status') {
-      sendResponse({ isRecording });
-    }
-    
-    return true;
-  } else if (request.type === 'RESET_AGENT') {
+  if (request.type === 'RESET_AGENT') {
     console.log('[Pilot] Received RESET_AGENT request');
     syncAIConfig();
     return true;
@@ -273,17 +122,6 @@ chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     sendResponse({ forwarded: true });
     return true;
   }
-});
-
-// 初始化：询问 Background 是否正在录制
-chrome.runtime.sendMessage({ type: 'RECORDING_GET_STATUS' }).then(response => {
-  if (response?.isRecording) {
-    isRecording = true;
-    startEventCapture();
-    console.log('[Pilot Recording] Resumed recording state from background');
-  }
-}).catch(() => {
-  // 忽略扩展环境未准备好的错误
 });
 
 // ============== Original Bridge Logic ==============

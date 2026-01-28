@@ -1,6 +1,5 @@
 import { ReadyEventType } from '../lib/types';
 import * as pageReadyManager from './managers/page-ready';
-import * as recordingManager from './managers/recording';
 import * as workflowManager from './managers/workflow';
 import * as navigationManager from './managers/navigation';
 import { parseScriptToWorkflow } from '../lib/parser';
@@ -74,90 +73,5 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const { tabId } = request.payload;
     workflowManager.stopWorkflow(tabId);
     sendResponse({ success: true });
-  } else if (request.type === 'RECORDING_STEP') {
-    recordingManager.addStepToSession(request.payload);
-  } else if (request.type === 'RECORDING_START') {
-    const { tabId, scriptId } = request.payload;
-    recordingManager.startRecording(tabId, scriptId).then(() => {
-      sendResponse({ success: true, session: recordingManager.getSession(scriptId) });
-    });
-    return true;
-  } else if (request.type === 'RECORDING_STOP') {
-    const activeScriptId = recordingManager.getActiveScriptId();
-    recordingManager.stopRecording().then(() => {
-      sendResponse({ success: true, session: activeScriptId ? recordingManager.getSession(activeScriptId) : null });
-    });
-    return true;
-  } else if (request.type === 'RECORDING_PAUSE') {
-    const activeScriptId = recordingManager.getActiveScriptId();
-    recordingManager.pauseRecording().then(() => {
-      sendResponse({ success: true, session: activeScriptId ? recordingManager.getSession(activeScriptId) : null });
-    });
-    return true;
-  } else if (request.type === 'RECORDING_RESUME') {
-    const activeScriptId = recordingManager.getActiveScriptId();
-    recordingManager.resumeRecording().then(() => {
-      sendResponse({ success: true, session: activeScriptId ? recordingManager.getSession(activeScriptId) : null });
-    });
-    return true;
-  } else if (request.type === 'RECORDING_GET_SESSION') {
-    const { scriptId } = request.payload || {};
-    const isRestoring = recordingManager.getIsRestoring();
-    console.log('[Pilot BG] RECORDING_GET_SESSION for scriptId:', scriptId, 'isRestoring:', isRestoring);
-    
-    if (!scriptId) {
-      sendResponse({ session: null });
-      return;
-    }
-
-    const sendRes = () => {
-      const session = recordingManager.getSession(scriptId) || null;
-      console.log('[Pilot BG] Returning session for', scriptId, ':', session ? `${session.steps?.length} steps` : 'null');
-      sendResponse({ session });
-    };
-
-    if (isRestoring) {
-      console.log('[Pilot BG] Still restoring, fetching from storage...');
-      recordingManager.ensureRestored().then(() => {
-        sendRes();
-      });
-      return true;
-    } else {
-      sendRes();
-    }
-  } else if (request.type === 'RECORDING_DELETE_STEP') {
-    const { scriptId, stepId } = request.payload;
-    recordingManager.deleteStep(scriptId, stepId);
-    sendResponse({ success: true, session: recordingManager.getSession(scriptId) });
-  } else if (request.type === 'RECORDING_UPDATE_STEP') {
-    const { scriptId, stepId, updates } = request.payload;
-    recordingManager.updateStep(scriptId, stepId, updates);
-    sendResponse({ success: true, session: recordingManager.getSession(scriptId) });
-  } else if (request.type === 'RECORDING_ADD_AI_STEP') {
-    const { scriptId, instruction } = request.payload;
-    recordingManager.addAiStep(scriptId, instruction);
-    // addAiStep is async (tabs.query), but we return success immediately, updates via notification
-    sendResponse({ success: true, session: recordingManager.getSession(scriptId) });
-  } else if (request.type === 'RECORDING_CLEAR') {
-    const { scriptId } = request.payload;
-    recordingManager.clearRecording(scriptId);
-    sendResponse({ success: true });
-  } else if (request.type === 'RECORDING_GET_STATUS') {
-    const checkStatus = () => {
-      const activeScriptId = recordingManager.getActiveScriptId();
-      const session = activeScriptId ? recordingManager.getSession(activeScriptId) : null;
-      sendResponse({
-        isRecording: activeScriptId !== null && session?.status === 'recording',
-        activeScriptId,
-        session
-      });
-    };
-
-    if (recordingManager.getIsRestoring()) {
-       recordingManager.ensureRestored().then(checkStatus);
-      return true;
-    } else {
-      checkStatus();
-    }
   }
 });
