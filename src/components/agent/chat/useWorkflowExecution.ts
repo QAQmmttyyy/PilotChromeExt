@@ -3,19 +3,21 @@ import type { UIMessage, UseChatHelpers } from "@ai-sdk/react";
 import type { ToolUIPart } from "ai";
 import { isToolOrDynamicToolUIPart, getToolOrDynamicToolName } from "ai";
 import { extractExecutedToolIds } from "./utils";
-import type { 
-  ExecuteWorkflowOutput, 
-  WorkflowStepState, 
+import type {
+  ExecuteWorkflowOutput,
+  WorkflowStepState,
   AgentTools,
-  ExecuteWorkflowToolPart
+  ExecuteWorkflowToolPart,
 } from "@pilot/shared";
 
 type SetMessages = (
   messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[]),
 ) => void;
 
-function isExecuteWorkflowPart(part: ToolUIPart<AgentTools>): part is ExecuteWorkflowToolPart {
-  return getToolOrDynamicToolName(part) === 'executeWorkflow';
+function isExecuteWorkflowPart(
+  part: ToolUIPart<AgentTools>,
+): part is ExecuteWorkflowToolPart {
+  return getToolOrDynamicToolName(part) === "executeWorkflow";
 }
 
 export function useWorkflowExecution(
@@ -36,7 +38,7 @@ export function useWorkflowExecution(
         if (!isToolOrDynamicToolUIPart(messagePart)) return;
 
         const part = messagePart as ToolUIPart<AgentTools>;
-        
+
         if (!isExecuteWorkflowPart(part)) return;
         if (executedToolIdsRef.current.has(part.toolCallId)) return;
         if (part.state !== "input-available") return;
@@ -46,12 +48,17 @@ export function useWorkflowExecution(
 
         executedToolIdsRef.current.add(toolCallId);
 
+        // Get tabId if available from error case
+        let tabId: chrome.tabs.Tab["id"];
+
         try {
           const [tab] = await chrome.tabs.query({
             active: true,
             currentWindow: true,
           });
-          if (!tab?.id) {
+          tabId = tab.id;
+
+          if (!tabId) {
             throw new Error("No active tab found");
           }
 
@@ -62,7 +69,7 @@ export function useWorkflowExecution(
             totalSteps: 0,
             currentStep: 0,
             steps: [],
-            tabId: tab.id,
+            tabId,
           };
 
           // Update tool part to show execution state
@@ -100,14 +107,7 @@ export function useWorkflowExecution(
           });
         } catch (err) {
           console.error("Failed to execute workflow:", err);
-          
-          // Get tabId if available from error case
-          let tabId: number | undefined;
-          try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            tabId = tab?.id;
-          } catch {}
-          
+
           const failedOutput: ExecuteWorkflowOutput = {
             status: "failed",
             startTime: Date.now(),
@@ -163,16 +163,19 @@ export function useWorkflowExecution(
             return {
               ...msg,
               parts: msg.parts.map((part) => {
-                if (!isToolOrDynamicToolUIPart(part) || part.toolCallId !== toolCallId)
+                if (
+                  !isToolOrDynamicToolUIPart(part) ||
+                  part.toolCallId !== toolCallId
+                )
                   return part;
 
                 const output =
                   (part.output as ExecuteWorkflowOutput) ||
                   createInitialOutput();
-                const newOutput = { 
-                  ...output, 
+                const newOutput = {
+                  ...output,
                   steps: [...output.steps],
-                  tabId: tabId || output.tabId
+                  tabId: tabId || output.tabId,
                 };
 
                 // Ensure steps array is long enough
@@ -219,17 +222,20 @@ export function useWorkflowExecution(
             return {
               ...msg,
               parts: msg.parts.map((part) => {
-                if (!isToolOrDynamicToolUIPart(part) || part.toolCallId !== toolCallId)
+                if (
+                  !isToolOrDynamicToolUIPart(part) ||
+                  part.toolCallId !== toolCallId
+                )
                   return part;
 
                 const output =
                   (part.output as ExecuteWorkflowOutput) ||
                   createInitialOutput();
 
-                const newOutput = { 
-                  ...output, 
+                const newOutput = {
+                  ...output,
                   steps: [...output.steps],
-                  tabId: tabId || output.tabId
+                  tabId: tabId || output.tabId,
                 };
 
                 // Ensure steps array is long enough
@@ -281,7 +287,10 @@ export function useWorkflowExecution(
             return {
               ...msg,
               parts: msg.parts.map((part) => {
-                if (!isToolOrDynamicToolUIPart(part) || part.toolCallId !== toolCallId)
+                if (
+                  !isToolOrDynamicToolUIPart(part) ||
+                  part.toolCallId !== toolCallId
+                )
                   return part;
 
                 const output =
