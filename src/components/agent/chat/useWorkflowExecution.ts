@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { UIMessage, UseChatHelpers } from "@ai-sdk/react";
-import type { UIMessagePart, UIDataTypes, UITools, ToolUIPart } from "ai";
+import type { ToolUIPart } from "ai";
 import { isToolOrDynamicToolUIPart, getToolOrDynamicToolName } from "ai";
 import { extractExecutedToolIds } from "./utils";
 import type { 
@@ -200,9 +200,9 @@ export function useWorkflowExecution(
                 newOutput.currentStep = stepIndex;
                 newOutput.totalSteps = newOutput.steps.length;
 
-                return { ...part, output: newOutput } as UIMessagePart<UIDataTypes, UITools>;
-              }) as UIMessagePart<UIDataTypes, UITools>[],
-            };
+                return { ...part, output: newOutput };
+              }),
+            } as UIMessage;
           });
         });
       }
@@ -247,9 +247,9 @@ export function useWorkflowExecution(
                   newOutput.steps.length,
                 );
 
-                return { ...part, output: newOutput } as UIMessagePart<UIDataTypes, UITools>;
-              }) as UIMessagePart<UIDataTypes, UITools>[],
-            };
+                return { ...part, output: newOutput };
+              }),
+            } as UIMessage;
           });
         });
       }
@@ -311,9 +311,9 @@ export function useWorkflowExecution(
                     status === "failed"
                       ? error || "Workflow execution failed"
                       : undefined,
-                } as UIMessagePart<UIDataTypes, UITools>;
-              }) as UIMessagePart<UIDataTypes, UITools>[],
-            };
+                };
+              }),
+            } as UIMessage;
           });
         });
 
