@@ -1,11 +1,11 @@
-import { ReadyEventType } from '../lib/types';
-import * as pageReadyManager from './managers/page-ready';
-import * as workflowManager from './managers/workflow';
-import * as navigationManager from './managers/navigation';
-import { parseScriptToWorkflow } from '../lib/parser';
-import type { PageAgentLogEntry } from '@pilot/shared';
+import { ReadyEventType } from "../lib/types";
+import * as pageReadyManager from "./managers/page-ready";
+import * as workflowManager from "./managers/workflow";
+import * as navigationManager from "./managers/navigation";
+import type { PageAgentLogEntry } from "@pilot/shared";
+import { executeChromeApi } from "./executors";
 
-console.log('Pilot background script loaded');
+console.log("Pilot background script loaded");
 
 // 点击扩展图标时打开 sidepanel
 chrome.action.onClicked.addListener((tab) => {
@@ -19,37 +19,52 @@ navigationManager.setupNavigationListeners();
 
 // ============== Message Handling ==============
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('[Pilot BG] Received message:', request.type);
+  console.log("[Pilot BG] Received message:", request.type);
 
   // 处理就绪事件
-  if (request.type && ['CONTENT_SCRIPT_READY', 'PAGE_AGENT_READY', 'PAGE_FULLY_READY'].includes(request.type)) {
+  if (
+    request.type &&
+    ["CONTENT_SCRIPT_READY", "PAGE_AGENT_READY", "PAGE_FULLY_READY"].includes(
+      request.type,
+    )
+  ) {
     const tabId = sender.tab?.id;
     if (tabId) {
       // 在 content script 就绪时注入 main-world script
-      if (request.type === 'CONTENT_SCRIPT_READY') {
-        console.log(`[Pilot] Content script ready in tab ${tabId}, injecting main-world script`);
-        chrome.scripting.executeScript({
-          target: { tabId },
-          files: ['main-world.js'],
-          world: 'MAIN',
-        }).then(() => {
-          console.log(`[Pilot] Main world script injected successfully in tab ${tabId}`);
-        }).catch((error) => {
-          console.error(`[Pilot] Failed to inject main world script in tab ${tabId}:`, error);
-        });
+      if (request.type === "CONTENT_SCRIPT_READY") {
+        console.log(
+          `[Pilot] Content script ready in tab ${tabId}, injecting main-world script`,
+        );
+        chrome.scripting
+          .executeScript({
+            target: { tabId },
+            files: ["main-world.js"],
+            world: "MAIN",
+          })
+          .then(() => {
+            console.log(
+              `[Pilot] Main world script injected successfully in tab ${tabId}`,
+            );
+          })
+          .catch((error) => {
+            console.error(
+              `[Pilot] Failed to inject main world script in tab ${tabId}:`,
+              error,
+            );
+          });
       }
-      
+
       pageReadyManager.handleReadyEvent({
         type: request.type as ReadyEventType,
         tabId,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     }
     sendResponse({ success: true });
     return;
   }
 
-  if (request.type === 'PAGEAGENT_STEP') {
+  if (request.type === "PAGEAGENT_STEP") {
     // Forward PageAgent logs to workflow manager
     const tabId = sender.tab?.id;
     if (tabId) {
@@ -59,19 +74,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         workflowManager.forwardPageAgentLog(
           tabId,
           workflow.currentStepIndex,
-          payload
+          payload,
         );
       }
     }
-  } else if (request.type === 'PILOT_BRIDGE_ACTION') {
+  } else if (request.type === "PILOT_BRIDGE_ACTION") {
     workflowManager.handleBridgeAction(request.action, request.payload, sender);
-  } else if (request.type === 'START_WORKFLOW') {
-    const { steps, script, tabId, toolCallId } = request.payload;
-    const workflowSteps = steps || (script ? parseScriptToWorkflow(script) : []);
-    workflowManager.prepareAndStartWorkflow(workflowSteps, tabId, toolCallId);
-  } else if (request.type === 'STOP_WORKFLOW') {
+  } else if (request.type === "START_WORKFLOW") {
+    const { steps, tabId, toolCallId } = request.payload;
+    workflowManager.prepareAndStartWorkflow(steps, tabId, toolCallId);
+  } else if (request.type === "STOP_WORKFLOW") {
+    // TODO: toolcallid
     const { tabId } = request.payload;
     workflowManager.stopWorkflow(tabId);
     sendResponse({ success: true });
+  }
+  // ============== New ReAct Tool Messages ==============
+  else if (request.type === "EXECUTE_CHROME_API") {
+    if (!request.payload) {
+      return false;
+    }
+
+    const { toolCallId, action, params } = request.payload;
+    (async () => {
+      const output = await executeChromeApi(action, params);
+      chrome.runtime.sendMessage({
+        type: "CHROME_API_RESULT",
+        payload: { toolCallId, output },
+      });
+    })();
+    return false;
   }
 });

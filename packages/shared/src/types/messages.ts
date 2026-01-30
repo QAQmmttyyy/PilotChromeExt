@@ -115,6 +115,79 @@ export interface ExecuteWorkflowInput {
   script: string;
 }
 
+// ============= New ReAct Tools =============
+
+// PageAction Tool - PageAgent 托管执行页面操作
+export interface PageActionInput {
+  tabId: number;
+  instruction: string;
+}
+
+export type PageActionOutput = ExecuteWorkflowOutput;
+
+// Chrome API Tools - Split into individual tools for clearer parameters
+
+export const CHROME_API_TOOLS = [
+  "create_tab",
+  "update_tab",
+  "close_tab",
+  "get_tab",
+  "query_tabs",
+  "capture_screenshot",
+] as const;
+
+export type ChromeApiToolName = (typeof CHROME_API_TOOLS)[number];
+
+export interface CreateTabInput {
+  url?: string;
+  active?: boolean;
+}
+
+export interface UpdateTabInput {
+  url?: string;
+  tabId?: number;
+  active?: boolean;
+}
+
+export interface CloseTabInput {
+  tabId: number;
+}
+
+export interface GetTabInput {
+  tabId?: number;
+}
+
+export interface QueryTabsInput {
+  active?: boolean;
+  currentWindow?: boolean;
+}
+
+export interface CaptureScreenshotInput {
+  tabId?: number;
+}
+
+export interface ChromeApiOutput {
+  success: boolean;
+  data?: unknown;
+  error?: string;
+}
+
+export interface ChromeApiMessage {
+  type: "EXECUTE_CHROME_API";
+  payload: {
+    toolCallId: string;
+    script: string;
+  };
+}
+
+export interface ChromeApiResultMessage {
+  type: "CHROME_API_RESULT";
+  payload: {
+    toolCallId: string;
+    output: ChromeApiOutput;
+  };
+}
+
 // Complete Agent Tools Collection (using AI SDK UITools type)
 export interface AgentTools extends UITools {
   generateSteps: {
@@ -129,13 +202,44 @@ export interface AgentTools extends UITools {
     input: ExecuteWorkflowInput;
     output: ExecuteWorkflowOutput;
   };
+  // New ReAct tools
+  page_action: {
+    input: PageActionInput;
+    output: PageActionOutput;
+  };
+  // Chrome API tools
+  create_tab: {
+    input: CreateTabInput;
+    output: ChromeApiOutput;
+  };
+  update_tab: {
+    input: UpdateTabInput;
+    output: ChromeApiOutput;
+  };
+  close_tab: {
+    input: CloseTabInput;
+    output: ChromeApiOutput;
+  };
+  get_tab: {
+    input: GetTabInput;
+    output: ChromeApiOutput;
+  };
+  query_tabs: {
+    input: QueryTabsInput;
+    output: ChromeApiOutput;
+  };
+  capture_screenshot: {
+    input: CaptureScreenshotInput;
+    output: ChromeApiOutput;
+  };
 }
 
 // Helper type to extract a specific tool's UI part
 export type ToolPartOf<
   TOOLS extends UITools,
-  NAME extends keyof TOOLS & string
+  NAME extends keyof TOOLS & string,
 > = { type: `tool-${NAME}` } & UIToolInvocation<TOOLS[NAME]>;
 
 // Typed tool parts for direct use
-export type ExecuteWorkflowToolPart = ToolPartOf<AgentTools, 'executeWorkflow'>;
+export type ExecuteWorkflowToolPart = ToolPartOf<AgentTools, "executeWorkflow">;
+export type PageActionToolPart = ToolPartOf<AgentTools, "page_action">;

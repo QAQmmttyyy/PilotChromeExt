@@ -13,4 +13,3 @@ export function extractExecutedToolIds(messages: UIMessage[]): Set<string> {
   }
   return ids;
 }
-

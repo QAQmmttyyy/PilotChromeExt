@@ -8,7 +8,12 @@ import type {
   WorkflowStepState,
   AgentTools,
   ExecuteWorkflowToolPart,
+  PageActionToolPart,
+  PageActionInput,
+  ExecuteWorkflowInput,
 } from "@pilot/shared";
+import { parseScriptToWorkflow } from "@/lib/parser";
+import { WorkflowStep } from "@/lib/types";
 
 type SetMessages = (
   messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[]),
@@ -18,6 +23,12 @@ function isExecuteWorkflowPart(
   part: ToolUIPart<AgentTools>,
 ): part is ExecuteWorkflowToolPart {
   return getToolOrDynamicToolName(part) === "executeWorkflow";
+}
+
+function isPageActionPart(
+  part: ToolUIPart<AgentTools>,
+): part is PageActionToolPart {
+  return getToolOrDynamicToolName(part) === "page_action";
 }
 
 export function useWorkflowExecution(
@@ -38,27 +49,29 @@ export function useWorkflowExecution(
         if (!isToolOrDynamicToolUIPart(messagePart)) return;
 
         const part = messagePart as ToolUIPart<AgentTools>;
-
-        if (!isExecuteWorkflowPart(part)) return;
-        if (executedToolIdsRef.current.has(part.toolCallId)) return;
-        if (part.state !== "input-available") return;
-
         const { toolCallId, input } = part;
-        const script = input.script;
+
+        if (executedToolIdsRef.current.has(toolCallId)) return;
+        if (part.state !== "input-available") return;
+        if (!isExecuteWorkflowPart(part) && !isPageActionPart(part)) return;
 
         executedToolIdsRef.current.add(toolCallId);
 
         // Get tabId if available from error case
-        let tabId: chrome.tabs.Tab["id"];
+        let targetTabId: chrome.tabs.Tab["id"] = isPageActionPart(part)
+          ? (input as PageActionInput).tabId
+          : undefined;
 
         try {
-          const [tab] = await chrome.tabs.query({
-            active: true,
-            currentWindow: true,
-          });
-          tabId = tab.id;
+          if (!targetTabId) {
+            const [tab] = await chrome.tabs.query({
+              active: true,
+              currentWindow: true,
+            });
+            targetTabId = tab.id;
+          }
 
-          if (!tabId) {
+          if (!targetTabId) {
             throw new Error("No active tab found");
           }
 
@@ -69,7 +82,7 @@ export function useWorkflowExecution(
             totalSteps: 0,
             currentStep: 0,
             steps: [],
-            tabId,
+            tabId: targetTabId,
           };
 
           // Update tool part to show execution state
@@ -95,13 +108,25 @@ export function useWorkflowExecution(
 
           console.log(
             "[useWorkflowExecution] Starting workflow in tab:",
-            tab.id,
+            targetTabId,
           );
+
+          let workflowSteps: WorkflowStep[] = [];
+          if (isExecuteWorkflowPart(part)) {
+            workflowSteps = parseScriptToWorkflow(
+              (input as ExecuteWorkflowInput).script,
+            );
+          } else if (isPageActionPart(part)) {
+            workflowSteps = [
+              convertPageActionToWorkflowStep(input as PageActionInput),
+            ];
+          }
+
           await chrome.runtime.sendMessage({
             type: "START_WORKFLOW",
             payload: {
-              script,
-              tabId: tab.id,
+              steps: workflowSteps,
+              tabId: targetTabId,
               toolCallId,
             },
           });
@@ -114,7 +139,7 @@ export function useWorkflowExecution(
             totalSteps: 0,
             currentStep: 0,
             steps: [],
-            tabId,
+            tabId: targetTabId,
             error: err instanceof Error ? err.message : String(err),
             endTime: Date.now(),
           };
@@ -373,6 +398,28 @@ function createEmptyStep(index: number): WorkflowStepState {
     stepIndex: index,
     stepName: "",
     status: "pending",
+  };
+}
+
+function convertPageActionToWorkflowStep(input: PageActionInput): WorkflowStep {
+  return {
+    id: `step-page-action-${Date.now()}`,
+    name: input.instruction,
+    code: `
+    (async () => {
+      try {
+        if (!window.pageAgent?.execute) throw new Error("PageAgent 未就绪");
+        const result = await window.pageAgent.execute("${input.instruction}");
+        if (!result.success) return window.Pilot.workflow.fail(result.data);
+        window.Pilot.workflow.next();
+      } catch (err) {
+        if (err.message?.includes('disposed')) return;
+        window.Pilot.workflow.fail(err.message);
+      }
+    })();
+    `,
+    isAiStep: true,
+    instruction: input.instruction,
   };
 }
 

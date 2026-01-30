@@ -1,0 +1,1 @@
+export { executeChromeApi } from './chromeApi';

@@ -46,6 +46,7 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
               </MessageContent>
             );
           }
+
           if (isToolOrDynamicToolUIPart(part)) {
             return (
               <Tool
@@ -55,6 +56,7 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
               />
             );
           }
+
           return null;
         })}
       </div>

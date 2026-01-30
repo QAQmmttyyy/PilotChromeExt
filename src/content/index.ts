@@ -84,6 +84,18 @@ window.addEventListener('message', (event) => {
       payload: message.payload
     }).catch(() => {});
   }
+
+  // Handle PAGE_ACTION_COMPLETE from Main World
+  if (event.data.source === 'PILOT_PAGE_ACTION' && event.data.type === 'PAGE_ACTION_COMPLETE') {
+    console.log('[Pilot] PageAction complete:', event.data.toolCallId);
+    chrome.runtime.sendMessage({
+      type: 'PAGE_ACTION_COMPLETE',
+      payload: {
+        toolCallId: event.data.toolCallId,
+        result: event.data.result,
+      }
+    }).catch(() => {});
+  }
 });
 
 // 监听存储变化，实时同步配置到 Main World

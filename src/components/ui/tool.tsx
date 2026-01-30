@@ -29,6 +29,7 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
   const { state, input, output } = toolPart
   const toolName = getToolOrDynamicToolName(toolPart)
   const isWorkflow = toolName === 'executeWorkflow'
+  const isPageAction = toolName === 'page_action'
 
   const getStateIcon = () => {
     switch (state) {
@@ -73,7 +74,9 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0">
-              {isWorkflow && output ? <WorkflowHeaderExtra output={output as ExecuteWorkflowOutput} /> : null}
+              {(isWorkflow || isPageAction) && output ? (
+                <WorkflowHeaderExtra output={output as ExecuteWorkflowOutput} />
+              ) : null}
               <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform duration-200", isOpen && "rotate-180")} />
             </div>
           </Button>
@@ -94,7 +97,7 @@ const Tool = ({ toolPart, defaultOpen = false, className }: ToolProps) => {
 
             {(
               <>
-                {isWorkflow ? (
+                {(isWorkflow || isPageAction) ? (
                   output && <WorkflowContent output={output as unknown as ExecuteWorkflowOutput} />
                 ) : (
                   <>

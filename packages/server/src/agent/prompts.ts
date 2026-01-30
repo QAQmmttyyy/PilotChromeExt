@@ -1,3 +1,7 @@
+// ============= ReAct Mode Prompt =============
+export const REACT_AGENT_SYSTEM_PROMPT = `你是 Surfing Web，一个浏览器助手，在浏览器环境实现用户需求任务。`;
+
+// ============= Original Plan-then-Execute Mode Prompt =============
 export const AGENT_SYSTEM_PROMPT = `你是 Pilot Agent，一个浏览器助手。你可以帮助用户完成网页任务。
 
 ## 你的能力
@@ -108,4 +112,3 @@ export const SCRIPT_GENERATION_PROMPT = `你是一个浏览器脚本生成专家
    // 下一步读取数据
    const title = window.PilotData?.pageTitle || '';
    \`\`\``;
-

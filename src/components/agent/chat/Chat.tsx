@@ -11,6 +11,7 @@ import { ScrollButton } from '@/components/ui/scroll-button';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { useWorkflowExecution } from './useWorkflowExecution';
+import { useChromeApi } from './useChromeApi';
 
 export interface ChatProps {
   chatId: string;
@@ -51,6 +52,7 @@ export function Chat({ chatId, isNewChat, serverUrl, initialMessages, onConversa
   }, [status, isNewChat, chatId, onConversationCreated]);
 
   useWorkflowExecution(messages, initialMessages, setMessages, addToolOutput);
+  useChromeApi(messages, initialMessages, setMessages, addToolOutput);
 
   const handleSubmit = () => {
     if (!input.trim() || isLoading) return;

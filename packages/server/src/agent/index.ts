@@ -1,23 +1,33 @@
-import { streamText, stepCountIs, tool, convertToModelMessages, type UIMessage } from 'ai';
+import { streamText, stepCountIs, convertToModelMessages, type UIMessage } from 'ai';
 import { getModel } from '../lib/config';
-import { generateStepsTool, generateScriptTool, executeWorkflowTool } from './tools';
-import { AGENT_SYSTEM_PROMPT } from './prompts';
-
-const tools = {
-  generateSteps: generateStepsTool,
-  generateScript: generateScriptTool,
-  executeWorkflow: executeWorkflowTool,
-};
+import {
+  pageActionTool,
+  createTabTool,
+  updateTabTool,
+  closeTabTool,
+  getTabTool,
+  queryTabsTool,
+  captureScreenshotTool,
+} from './tools';
+import { REACT_AGENT_SYSTEM_PROMPT } from './prompts';
 
 export async function streamAgentResponse(messages: UIMessage[]) {
   const modelMessages = convertToModelMessages(messages);
   
-  const result = streamText({
+  return streamText({
     model: getModel(),
-    system: AGENT_SYSTEM_PROMPT,
+    system: REACT_AGENT_SYSTEM_PROMPT,
     messages: modelMessages,
-    tools,
-    stopWhen: stepCountIs(10),
+    tools: {
+      page_action: pageActionTool,
+      create_tab: createTabTool,
+      update_tab: updateTabTool,
+      close_tab: closeTabTool,
+      get_tab: getTabTool,
+      query_tabs: queryTabsTool,
+      capture_screenshot: captureScreenshotTool,
+    },
+    stopWhen: stepCountIs(100),
     onChunk: ({ chunk }) => {
       console.log('[Stream Chunk]', chunk.type, JSON.stringify(chunk, null, 2));
     },
@@ -47,8 +57,4 @@ export async function streamAgentResponse(messages: UIMessage[]) {
       }, null, 2));
     },
   });
-
-  return result;
 }
-
-export { tools };
