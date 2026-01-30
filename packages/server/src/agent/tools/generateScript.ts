@@ -15,11 +15,11 @@ const RecordedStepSchema = z.object({
 });
 
 export const generateScriptTool = tool({
-  description: `根据步骤序列生成可执行的 JavaScript 脚本。
-在步骤生成完成后，用户确认步骤正确时调用此工具。
-生成的脚本将在浏览器中执行。`,
+  description: `Generate executable JavaScript script based on the sequence of steps.
+Called when the user confirms the steps are correct after step generation.
+The generated script will be executed in the browser.`,
   inputSchema: z.object({
-    steps: z.array(RecordedStepSchema).describe('步骤序列'),
+    steps: z.array(RecordedStepSchema).describe('Sequence of steps'),
   }),
   execute: async ({ steps }): Promise<GenerateScriptOutput> => {
     try {
@@ -32,7 +32,7 @@ export const generateScriptTool = tool({
       const { text } = await generateText({
         model: getModel(),
         system: SCRIPT_GENERATION_PROMPT,
-        prompt: `请根据以下步骤生成脚本：\n\n${stepsJson}`,
+        prompt: `Please generate a script based on the following steps:\n\n${stepsJson}`,
       });
 
       const script = cleanGeneratedCode(text);

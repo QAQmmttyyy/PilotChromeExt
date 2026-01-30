@@ -5,22 +5,22 @@ import { STEPS_GENERATION_PROMPT } from '../prompts';
 import { getModel } from '../../lib/config';
 
 const StepSchema = z.object({
-  type: z.enum(['navigate', 'ai_step']).describe('步骤类型：navigate 为导航，ai_step 为 AI 操作'),
-  url: z.string().optional().describe('导航目标 URL，navigate 类型必填'),
-  value: z.string().optional().describe('操作指令描述，ai_step 类型必填'),
+  type: z.enum(['navigate', 'ai_step']).describe('Step type: navigate for navigation, ai_step for AI operation'),
+  url: z.string().optional().describe('Target URL for navigation, required for navigate type'),
+  value: z.string().optional().describe('Operation instruction description, required for ai_step type'),
 });
 
 const StepsResponseSchema = z.object({
-  steps: z.array(StepSchema).describe('网页任务的步骤序列'),
+  steps: z.array(StepSchema).describe('Sequence of steps for the web task'),
 });
 
 export const generateStepsTool = tool({
-  description: `将用户的任务分解为可执行的步骤序列。
-当用户描述一个浏览器任务时调用此工具。
-步骤类型包括：navigate（导航到URL）、ai_step（AI执行的操作如点击、输入等）。
-返回结构化的步骤列表供用户确认。`,
+  description: `Decompose the user's task into an executable sequence of steps.
+Called when the user describes a browser task.
+Step types include: navigate (navigate to URL), ai_step (AI executed operations like click, input, etc.).
+Returns a structured list of steps for user confirmation.`,
   inputSchema: z.object({
-    task: z.string().describe('用户描述的任务'),
+    task: z.string().describe('The task described by the user'),
   }),
   execute: async ({ task }): Promise<GenerateStepsOutput> => {
     try {
@@ -40,7 +40,7 @@ export const generateStepsTool = tool({
         timestamp: Date.now(),
         type: step.type as 'navigate' | 'ai_step',
         url: step.url || '',
-        pageTitle: step.type === 'navigate' ? `导航到 ${step.url}` : (step.value || ''),
+        pageTitle: step.type === 'navigate' ? `Navigate to ${step.url}` : (step.value || ''),
         value: step.value,
       }));
 

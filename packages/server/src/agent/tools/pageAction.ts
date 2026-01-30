@@ -2,10 +2,10 @@ import { tool } from 'ai';
 import { z } from 'zod';
 
 export const pageActionTool = tool({
-  description: `在指定标签页执行操作，由网页端 PageAgent 托管执行。（注意：不能跨页面操作，必须是单页面内的操作）`,
+  description: `Execute an action on a specific tab, handled by the PageAgent in the web page. (Note: Cannot perform cross-page operations, must be within a single page)`,
   inputSchema: z.object({
-    tabId: z.number().describe('要在哪个标签页执行操作'),
-    instruction: z.string().describe('要执行的操作指令，使用自然语言描述，必须是单页面内的操作，不能跨页面操作，如"点击登录按钮"、"在搜索框输入 hello"'),
+    tabId: z.number().describe('The tab ID where the action should be executed'),
+    instruction: z.string().describe('The instruction to execute, using natural language. Must be a single-page operation, cannot cross pages. E.g., "Click login button", "Type hello in search box"'),
   }),
   // Client-side tool: no execute function
   // Frontend will handle via usePageAction hook

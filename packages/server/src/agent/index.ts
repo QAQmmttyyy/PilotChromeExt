@@ -7,7 +7,6 @@ import {
   closeTabTool,
   getTabTool,
   queryTabsTool,
-  captureScreenshotTool,
 } from './tools';
 import { REACT_AGENT_SYSTEM_PROMPT } from './prompts';
 
@@ -25,7 +24,6 @@ export async function streamAgentResponse(messages: UIMessage[]) {
       close_tab: closeTabTool,
       get_tab: getTabTool,
       query_tabs: queryTabsTool,
-      capture_screenshot: captureScreenshotTool,
     },
     stopWhen: stepCountIs(100),
     onChunk: ({ chunk }) => {
