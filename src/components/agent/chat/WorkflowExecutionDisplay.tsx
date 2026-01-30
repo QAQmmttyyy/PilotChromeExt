@@ -47,10 +47,16 @@ export function WorkflowHeaderExtra({ output }: { output: ExecuteWorkflowOutput 
 export function WorkflowContent({ output }: { output: ExecuteWorkflowOutput }) {
   const isHistoryMessage = output.status === 'completed' || output.status === 'failed';
 
+  // Filter steps to restore "step-by-step" reveal effect
+  // We pre-filled all steps to handle race conditions, but we only want to show
+  // steps that have started (or are about to start).
+  // For history messages (completed/failed workflows loaded from storage), show all steps that were executed.
+  const visibleSteps = output.steps.slice(0, output.currentStep + 1);
+
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(() => {
     if (isHistoryMessage) return new Set<number>();
     const allSteps = new Set<number>();
-    output.steps.forEach((_, idx) => allSteps.add(idx));
+    visibleSteps.forEach((_, idx) => allSteps.add(idx));
     return allSteps;
   });
 
@@ -58,11 +64,11 @@ export function WorkflowContent({ output }: { output: ExecuteWorkflowOutput }) {
     if (!isHistoryMessage) {
       setExpandedSteps(prev => {
         const next = new Set(prev);
-        output.steps.forEach((_, idx) => next.add(idx));
+        visibleSteps.forEach((_, idx) => next.add(idx));
         return next;
       });
     }
-  }, [output.steps.length, isHistoryMessage]);
+  }, [visibleSteps.length, isHistoryMessage]);
 
   const toggleStep = (idx: number) => {
     setExpandedSteps(prev => {
@@ -75,7 +81,7 @@ export function WorkflowContent({ output }: { output: ExecuteWorkflowOutput }) {
 
   return (
     <>
-      {output.steps.map((step, idx) => (
+      {visibleSteps.map((step, idx) => (
         <WorkflowStep
           key={idx}
           step={step}

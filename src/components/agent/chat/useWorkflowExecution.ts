@@ -75,13 +75,35 @@ export function useWorkflowExecution(
             throw new Error("No active tab found");
           }
 
+          let workflowSteps: WorkflowStep[] = [];
+          if (isExecuteWorkflowPart(part)) {
+            workflowSteps = parseScriptToWorkflow(
+              (input as ExecuteWorkflowInput).script,
+            );
+          } else if (isPageActionPart(part)) {
+            workflowSteps = [
+              convertPageActionToWorkflowStep(input as PageActionInput),
+            ];
+          }
+
+          // Pre-fill steps state to avoid race conditions with backend messages
+          const initialSteps: WorkflowStepState[] = workflowSteps.map(
+            (step, index) => ({
+              stepIndex: index,
+              stepName: step.name,
+              status: "pending",
+              instruction: step.instruction,
+              url: step.url,
+            }),
+          );
+
           // Initialize tool output with execution state (including tabId)
           const initialOutput: ExecuteWorkflowOutput = {
             status: "running",
             startTime: Date.now(),
-            totalSteps: 0,
+            totalSteps: workflowSteps.length,
             currentStep: 0,
-            steps: [],
+            steps: initialSteps,
             tabId: targetTabId,
           };
 
@@ -110,17 +132,6 @@ export function useWorkflowExecution(
             "[useWorkflowExecution] Starting workflow in tab:",
             targetTabId,
           );
-
-          let workflowSteps: WorkflowStep[] = [];
-          if (isExecuteWorkflowPart(part)) {
-            workflowSteps = parseScriptToWorkflow(
-              (input as ExecuteWorkflowInput).script,
-            );
-          } else if (isPageActionPart(part)) {
-            workflowSteps = [
-              convertPageActionToWorkflowStep(input as PageActionInput),
-            ];
-          }
 
           await chrome.runtime.sendMessage({
             type: "START_WORKFLOW",
@@ -270,6 +281,9 @@ export function useWorkflowExecution(
 
                 const step = { ...newOutput.steps[stepIndex] };
                 step.pageAgentLogs = [...(step.pageAgentLogs || []), log];
+                if (step.status === "pending") {
+                  step.status = "running";
+                }
                 newOutput.steps[stepIndex] = step;
 
                 // Update totalSteps if needed
@@ -411,7 +425,7 @@ function convertPageActionToWorkflowStep(input: PageActionInput): WorkflowStep {
         if (!window.pageAgent?.execute) throw new Error("PageAgent 未就绪");
         const result = await window.pageAgent.execute("${input.instruction}");
         if (!result.success) return window.Pilot.workflow.fail(result.data);
-        window.Pilot.workflow.next();
+        window.Pilot.workflow.finish();
       } catch (err) {
         if (err.message?.includes('disposed')) return;
         window.Pilot.workflow.fail(err.message);
