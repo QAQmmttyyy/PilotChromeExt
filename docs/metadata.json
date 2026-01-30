@@ -1,0 +1,21 @@
+{
+    "generation_info": {
+        "timestamp": "2026-01-29T15:56:23.257695",
+        "main_model": "gpt-4",
+        "generator_version": "1.0.1",
+        "repo_path": "/Users/workmoly/Documents/PilotChromeExt",
+        "commit_id": null
+    },
+    "statistics": {
+        "total_components": 139,
+        "leaf_nodes": 42,
+        "max_depth": 3
+    },
+    "files_generated": [
+        "overview.md",
+        "module_tree.json",
+        "first_module_tree.json",
+        "REFACTOR_PLAN.md",
+        "CHROME_API_ACCESS.md"
+    ]
+}
