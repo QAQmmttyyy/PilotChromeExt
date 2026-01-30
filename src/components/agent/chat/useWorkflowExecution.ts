@@ -423,7 +423,7 @@ function convertPageActionToWorkflowStep(input: PageActionInput): WorkflowStep {
     (async () => {
       try {
         if (!window.pageAgent?.execute) throw new Error("PageAgent 未就绪");
-        const result = await window.pageAgent.execute("${input.instruction}");
+        const result = await window.pageAgent.execute(${JSON.stringify(input.instruction)});
         if (!result.success) return window.Pilot.workflow.fail(result.data);
         window.Pilot.workflow.finish();
       } catch (err) {
